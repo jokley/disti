@@ -1,0 +1,11 @@
+Flask
+Flask-Cors
+gunicorn
+flask_sqlalchemy
+flask_marshmallow
+flask_mqtt
+marshmallow_sqlalchemy 
+psycopg2-binary
+datetime
+pytz
+
