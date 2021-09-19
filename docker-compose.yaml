@@ -1,0 +1,74 @@
+version: "3.8"
+
+services:
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: root@root.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.10
+
+  postgres:
+    image: postgres
+    container_name: postgres-db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      example-network:  
+        ipv4_address: 172.16.238.11
+
+  backend:
+    image: flask
+    container_name: flask-backend
+    build:
+      args:
+        - http_proxy=http://egvbrvproxy1v1.egv.at:8081
+        - https_proxy=http://egvbrvproxy1v1.egv.at:8081 
+      context: ./backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.12
+
+  frontend:
+    image: nextjs
+    container_name: next-frontend
+    build:
+      context: ./frontend
+    restart: unless-stopped
+
+    ports:
+      - 3000:3000
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.13
+
+networks:
+  example-network:
+    name: example-network
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.238.0/24
+
+volumes:
+  db_data:
+  pgadmin-data:
