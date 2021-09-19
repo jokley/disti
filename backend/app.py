@@ -5,7 +5,7 @@ from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 from datetime import datetime
 import pytz
 from flask_cors import CORS
-from flask_mqtt import Mqtt
+from flask_mqtt import Mqtt 
 
 TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
 
