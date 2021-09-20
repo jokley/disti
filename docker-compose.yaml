@@ -44,18 +44,18 @@ services:
       example-network:
         ipv4_address: 172.16.238.12
 
-  # frontend:
-  #   image: nextjs
-  #   container_name: next-frontend
-  #   build:
-  #     context: ./frontend
-  #   restart: unless-stopped
+  frontend:
+    image: nextjs
+    container_name: next-frontend
+    build:
+      context: ./frontend
+    restart: unless-stopped
 
-  #   ports:
-  #     - 3000:3000
-  #   networks:
-  #     example-network:
-  #       ipv4_address: 172.16.238.13
+    ports:
+      - 3000:3000
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.13
 
 networks:
   example-network:
