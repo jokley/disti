@@ -2,12 +2,9 @@
 FROM arm32v7/alpine:3.12
 
 RUN apk update
-RUN apk add postgresql-dev gcc python3-dev musl-dev build-base
+RUN apk add postgresql-dev gcc python3-dev musl-dev build-base py3-pip
 
 COPY requirements.txt /
-RUN set -xe \
-    && apt-get update \
-    && apt-get install python3-pip
 RUN pip install -r requirements.txt
 
 COPY . app
