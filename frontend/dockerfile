@@ -1,4 +1,5 @@
-FROM node:alpine as BUILD_IMAGE
+#FROM node:alpine as BUILD_IMAGE
+FROM arm32v7/node as BUILD_IMAGE
 
 WORKDIR /app
 
