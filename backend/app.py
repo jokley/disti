@@ -5,9 +5,13 @@ from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 from datetime import datetime
 import pytz
 from flask_cors import CORS
-from flask_mqtt import Mqtt 
+from flask_mqtt import Mqtt
+
 
 TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
+TIMESTAMP_NOW_OFFSET = pytz.timezone("Europe/Berlin").utcoffset(datetime.now()).total_seconds()
+TIMESTAMP_NOW_EPOCHE = int(datetime.now().timestamp()+TIMESTAMP_NOW_OFFSET)  
+
 
 app = Flask(__name__)
 CORS(app)
@@ -34,10 +38,14 @@ class Sensor(db.Model):
     humi = db.Column(db.Float(2), nullable=True)
     date = db.Column(db.DateTime(), default=TIMESTAMP_NOW,onupdate=TIMESTAMP_NOW)
 
-    # def __init__(self, name, temp,humi):
+    # def __init__(self, name, type,temp,humi=None):
     #     self.name = name
+    #     self.type = type
     #     self.temp = temp
     #     self.humi = humi
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
        
 
 class SensorSchema(SQLAlchemyAutoSchema):
@@ -116,8 +124,7 @@ def home():
 
 @app.route('/time')
 def time():
-    #TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
-    return jsonify(TIMESTAMP_NOW)
+    return jsonify(TIMESTAMP_NOW_EPOCHE,TIMESTAMP_NOW,TIMESTAMP_NOW_OFFSET)
 
  
 @app.route("/persons")
@@ -159,7 +166,13 @@ def handle_senors():
             return {"error": "The request payload is not in JSON format"}
 
     elif request.method == 'GET':
-         all_senors = Sensor.query.all()
+        FROM =request.args.get('from', default = TIMESTAMP_NOW_EPOCHE-36000, type = int)
+        TO = request.args.get('to', default = TIMESTAMP_NOW_EPOCHE, type = int)
+
+        VON = datetime.fromtimestamp(int(FROM + TIMESTAMP_NOW_OFFSET)).isoformat()
+        BIS = datetime.fromtimestamp(int(TO + TIMESTAMP_NOW_OFFSET)).isoformat()  
+
+        all_senors = Sensor.query.filter(Sensor.date >= VON).filter(Sensor.date<=BIS).all()
     return jsonify(sensors_schema.dump(all_senors))
 
 
