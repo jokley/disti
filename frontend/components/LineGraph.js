@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import Chart from "chart.js";
 
 
-const ExmapleChart = ({ data,labels,options }) => {
+const ExmapleChart = ({ label, data,labels,options }) => {
   
   const chartRef = useRef(null);
   const [myChart, setMyChart] = useState(null);
@@ -24,7 +24,7 @@ const ExmapleChart = ({ data,labels,options }) => {
         labels: labels,
         datasets: [
           {
-            label: "# of Votes",
+            label: label,
             data: [],
             backgroundColor: gradient,
             borderColor: gradient,
@@ -42,9 +42,9 @@ const ExmapleChart = ({ data,labels,options }) => {
     if (!myChart) return;
     myChart.data.datasets[0].data = data;
     myChart.update();
-  }, [data, myChart]);
+  }, [data,  myChart]);
 
-  return <canvas ref={chartRef} id="myChart" width="400" height="400" />;
+  return <canvas ref={chartRef} id="myChart" width="450" height="400" />;
 };
 
 export default ExmapleChart;
