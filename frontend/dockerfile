@@ -16,7 +16,8 @@ RUN npm run build
 # remove dev dependencies
 RUN npm prune --production
 
-FROM node:alpine
+#FROM node:alpine
+FROM arm32v7/node
 
 WORKDIR /app
 
