@@ -1,5 +1,6 @@
-FROM node:alpine as BUILD_IMAGE
+#FROM node:alpine as BUILD_IMAGE
 #FROM arm32v7/node as BUILD_IMAGE
+FROM hypriot/rpi-node as BUILD_IMAGE
 
 WORKDIR /app
 
@@ -16,8 +17,9 @@ RUN npm run build
 # remove dev dependencies
 RUN npm prune --production
 
-FROM node:alpine
+#FROM node:alpine
 #FROM arm32v7/node
+FROM hypriot/rpi-node
 
 WORKDIR /app
 
