@@ -36,9 +36,6 @@ services:
     image: flask
     container_name: flask-backend
     build:
-      args:
-        - http_proxy=http://egvbrvproxy1v1.egv.at:8081
-        - https_proxy=http://egvbrvproxy1v1.egv.at:8081 
       context: ./backend
     restart: unless-stopped
     ports:
