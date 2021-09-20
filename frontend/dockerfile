@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # install dependencies
-RUN npm install --proxy http://egvbrvproxy1v1.egv.at:8081/
+RUN npm install
 
 COPY . .
 
