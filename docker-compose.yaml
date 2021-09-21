@@ -36,7 +36,10 @@ services:
     image: arm32v6/eclipse-mosquitto
     container_name: mqtt-broker
     ports:
-      - "1883:1883"
+      - 1883:1883
+      - 8883:8883
+    volumes:
+      - mosquitto-conf:/mosquitto/config
     networks:
       example-network:  
         ipv4_address: 172.16.238.11
@@ -78,3 +81,4 @@ networks:
 volumes:
   db_data:
   pgadmin-data:
+  mosquitto-conf:
