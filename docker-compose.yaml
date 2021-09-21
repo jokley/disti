@@ -44,7 +44,7 @@ services:
       - mosquitto-log:/mosquitto/log
     networks:
       example-network:  
-        ipv4_address: 172.16.238.12
+        ipv4_address: 172.16.238.22
 
   backend:
     image: flask
