@@ -42,7 +42,7 @@ services:
       - mosquitto-conf:/mosquitto/config
     networks:
       example-network:  
-        ipv4_address: 172.16.238.11
+        ipv4_address: 172.16.238.12
 
   backend:
     image: flask
