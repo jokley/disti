@@ -31,6 +31,15 @@ services:
     networks:
       example-network:  
         ipv4_address: 172.16.238.11
+        
+  mqtt:
+    image: arm32v6/eclipse-mosquitto
+    container_name: mqtt-broker
+    ports:
+      - "1883:1883"
+  networks:
+      example-network:  
+        ipv4_address: 172.16.238.12
 
   backend:
     image: flask
@@ -42,7 +51,7 @@ services:
       - "5000:5000"
     networks:
       example-network:
-        ipv4_address: 172.16.238.12
+        ipv4_address: 172.16.238.13
 
   #frontend:
     #image: nextjs
@@ -55,7 +64,7 @@ services:
       #- 3000:3000
     #networks:
       #example-network:
-       # ipv4_address: 172.16.238.13
+       # ipv4_address: 172.16.238.14
 
 networks:
   example-network:
