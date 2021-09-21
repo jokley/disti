@@ -19,7 +19,7 @@ CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@postgres/flasksql'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-app.config['MQTT_BROKER_URL'] = "10.1.10.204"
+app.config['MQTT_BROKER_URL'] = "localhost"
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_KEEPALIVE'] =20
 
@@ -98,7 +98,8 @@ def handle_connect(client, userdata, flags, rc):
   
 
 @mqtt.on_message()
-def handle_message(client, userdata, message)
+def handle_message(client, userdata, message):
+    print(message.payload)
     if message.topic == "/sensors":
         data = json.loads(message.payload)
         if data['type'] == "ds18b20":
