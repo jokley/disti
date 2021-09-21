@@ -39,7 +39,7 @@ services:
       - 1883:1883
       - 8883:8883
     volumes:
-      - mosquitto-conf:/mosquitto/config
+      - mosquitto-conf:./mosquitto/config
     networks:
       example-network:  
         ipv4_address: 172.16.238.12
