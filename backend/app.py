@@ -155,7 +155,7 @@ def personadd():
     return render_template("index.html")
 
 
-@app.route('/senors', methods=['POST', 'GET'])
+@app.route('/sensors', methods=['POST', 'GET'])
 def handle_senors():
     if request.method == 'POST':
         if request.is_json:
