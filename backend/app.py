@@ -19,16 +19,16 @@ CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@postgres/flasksql'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# app.config['MQTT_BROKER_URL'] = "127.0.0.1"
-# app.config['MQTT_BROKER_PORT'] = 1883
-# app.config['MQTT_KEEPALIVE'] =20
+app.config['MQTT_BROKER_URL'] = "127.0.0.1"
+app.config['MQTT_BROKER_PORT'] = 1883
+app.config['MQTT_KEEPALIVE'] =20
 
 
 app.secret_key = 'hi'
 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
-# mqtt = Mqtt(app)
+mqtt = Mqtt(app)
 
 class Sensor(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -92,26 +92,31 @@ class CarsModel(db.Model):
         return f"<Car {self.name}>"
 
 
-# @mqtt.on_connect()
-# def handle_connect(client, userdata, flags, rc):
-#     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-#     mqtt.subscribe("/sensors")
+@mqtt.on_connect()
+def handle_connect(client, userdata, flags, rc):
+    mqtt.subscribe("/sensors")
   
 
+@mqtt.on_message()
+def handle_message(client, userdata, message):
+    if message.topic == "/sensorsss":
+        data = json.loads(message.payload)
+        if data['type'] == "ds18b20":
+            new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp']) 
+        elif data['type'] == "si7021":
+            new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'])   
+
+        db.session.add(new_sensor)
+        db.session.commit()
+  
 # @mqtt.on_subscribe()
 # def handle_subscribe(client, userdata, mid, granted_qos):
 #     print('on_subscribe client : {} userdata :{} mid :{} granted_qos:{}'.format(client, userdata, mid, granted_qos))
-
-# @mqtt.on_message()
-# def handle_message(client, userdata, message):
-#     print('on_message client : {} userdata :{} message.topic :{} message.payload :{}'.format(
-#         client, userdata, message.topic, message.payload.decode()))
 
 # @mqtt.on_disconnect()
 # def handle_disconnect(client, userdata, rc):
 #     print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
     
-
 # @mqtt.on_log()
 # def handle_logging(client, userdata, level, buf):
 #     print(level, buf)
@@ -260,3 +265,5 @@ def handle_car(car_id):
         return {"message": f"Car {car.name} successfully deleted."}
 
 db.create_all()
+
+    
