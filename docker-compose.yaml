@@ -35,9 +35,11 @@ services:
   mqtt:
     image: arm32v6/eclipse-mosquitto
     container_name: mqtt-broker
-    network_mode: host
     ports:
       - "1883:1883"
+    networks:
+      example-network:  
+        ipv4_address: 172.16.238.11
 
   backend:
     image: flask
