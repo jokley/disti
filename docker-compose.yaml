@@ -38,8 +38,8 @@ services:
     ports:
       - "1883:1883"
     networks:
-        example-network:  
-          ipv4_address: 172.16.238.12
+      example-network:  
+        ipv4_address: 172.16.238.12
 
   backend:
     image: flask
