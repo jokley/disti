@@ -99,7 +99,6 @@ def handle_connect(client, userdata, flags, rc):
 
 @mqtt.on_message()
 def handle_message(client, userdata, message)
-   print(message.payload)
     if message.topic == "/sensors":
         data = json.loads(message.payload)
         if data['type'] == "ds18b20":
