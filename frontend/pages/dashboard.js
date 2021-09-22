@@ -33,7 +33,7 @@ export default function App() {
     setFrom(TimestampNow-36000)
 
   };
-  const url = (`http://flask-backend:5000/sensors?from=${from}&to=${to}`);
+  const url = (`http://10.1.10.204:5000/sensors?from=${from}&to=${to}`);
 
   const { data, error } = useSWR(url);
 
