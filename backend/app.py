@@ -96,18 +96,18 @@ class CarsModel(db.Model):
 def handle_connect(client, userdata, flags, rc):
    mqtt.subscribe("/sensors")
 
-@mqtt.on_message()
-def handle_message(client, userdata, message):
-   print(message.payload , flush=True)
-   if message.topic == "/sensors":
-       data = json.loads(message.payload)
-       if data['type'] == "ds18b20":
-           new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp']) 
-       elif data['type'] == "si7021":
-           new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'])   
+#@mqtt.on_message()
+#def handle_message(client, userdata, message):
+   #print(message.payload , flush=True)
+   #if message.topic == "/sensors":
+       #data = json.loads(message.payload)
+       #if data['type'] == "ds18b20":
+           #new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp']) 
+       #elif data['type'] == "si7021":
+           #new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'])   
 
-       db.session.add(new_sensor)
-       db.session.commit()
+       #db.session.add(new_sensor)
+       #db.session.commit()
         
         
 @mqtt.on_message()
@@ -116,7 +116,7 @@ def handle_mqtt_message(client, userdata, message):
         topic=message.topic,
         payload=message.payload.decode()
     )
- print(data)
+    print(data)
   
 @mqtt.on_subscribe()
 def handle_subscribe(client, userdata, mid, granted_qos):
