@@ -32,17 +32,17 @@ services:
       example-network:  
         ipv4_address: 172.16.238.11
         
-  #backend:
-    #image: flask
-    #container_name: flask-backend
-    #build:
-      #context: ./backend
-    #restart: unless-stopped
-    #ports:
-      #- "5000:5000"
-    #networks:
-      #example-network:
-        #ipv4_address: 172.16.238.12
+  backend:
+    image: flask
+    container_name: flask-backend
+    build:
+      context: ./backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.12
         
   mqtt:
     #image: mjenz/rpi-mosquitto:latest
@@ -56,17 +56,17 @@ services:
       example-network:  
         ipv4_address: 172.16.238.13
 
-  #frontend:
-    #image: nextjs
-    #container_name: next-frontend
-    #build:
-      #context: ./frontend
-    #restart: unless-stopped
-    #ports:
-      #- "3000:3000"
-    #networks:
-      #example-network:
-        #ipv4_address: 172.16.238.14
+  frontend:
+    image: nextjs
+    container_name: next-frontend
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.14
         
   nginx:
     image: arm32v6/nginx:alpine
