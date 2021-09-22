@@ -72,7 +72,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./conf.d:/nginx/conf.d
+       - ./nginx:/etc/nginx/conf.d
     networks:
       example-network:
         ipv4_address: 172.16.238.15
