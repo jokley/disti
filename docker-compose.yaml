@@ -65,6 +65,18 @@ services:
     networks:
       example-network:
         ipv4_address: 172.16.238.14
+        
+  nginx:
+    image: arm32v6/nginx:alpine:3.12
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d
+     networks:
+      example-network:
+        ipv4_address: 172.16.238.14
 
 networks:
   example-network:
