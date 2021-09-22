@@ -108,6 +108,15 @@ def handle_message(client, userdata, message):
 
        db.session.add(new_sensor)
        db.session.commit()
+        
+        
+@mqtt.on_message()
+def handle_mqtt_message(client, userdata, message):
+    data = dict(
+        topic=message.topic,
+        payload=message.payload.decode()
+    )
+ print(data)
   
 @mqtt.on_subscribe()
 def handle_subscribe(client, userdata, mid, granted_qos):
