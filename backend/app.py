@@ -104,9 +104,9 @@ def handle_message(client, userdata, message):
    if message.topic == "/sensors":
        data = json.loads(message.payload.decode())
        if data['type'] == "ds18b20":
-           new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp']) 
+           new_sensor =  Sensor(name=data['sensor'],type=data['type'], temp=data['temp']) 
        elif data['type'] == "si7021":
-           new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'])   
+           new_sensor =  Sensor(name=data['sensor'],type=data['type'],temp=data['temp'],humi=data['humi'])   
        print(message.payload.decode())
        db.session.add(new_sensor)
        db.session.commit()
