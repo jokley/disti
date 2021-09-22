@@ -264,7 +264,5 @@ def handle_car(car_id):
         db.session.commit()
         return {"message": f"Car {car.name} successfully deleted."}
     
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", debug=True)
 
 db.create_all()
