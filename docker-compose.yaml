@@ -36,7 +36,7 @@ services:
     image: mjenz/rpi-mosquitto:latest
     container_name: mqtt-broker
     ports:
-      - 1883:1883
+      - "1883:1883"
     networks:
       example-network:  
         ipv4_address: 172.16.238.12
@@ -53,18 +53,18 @@ services:
       example-network:
         ipv4_address: 172.16.238.13
 
-  #frontend:
-    #image: nextjs
-    #container_name: next-frontend
-   #build:
-     # context: ./frontend
-    #restart: unless-stopped
+  frontend:
+    image: nextjs
+    container_name: next-frontend
+   build:
+      context: ./frontend
+    restart: unless-stopped
 
-    #ports:
-      #- 3000:3000
-    #networks:
-      #example-network:
-       # ipv4_address: 172.16.238.14
+    ports:
+      - "3000:3000"
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.14
 
 networks:
   example-network:
@@ -78,6 +78,3 @@ networks:
 volumes:
   db_data:
   pgadmin-data:
-  mosquitto-conf:
-  mosquitto-data:
-  mosquitto-log:
