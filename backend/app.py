@@ -102,7 +102,7 @@ mqtt.subscribe("/sensors")
 @mqtt.on_message()
 def handle_message(client, userdata, message):
    if message.topic == "/sensors":
-       print(message.payload.decode())
+       #print(message.payload.decode())
        data = json.loads(message.payload.decode())
        if data['type'] == "ds18b20":
            new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp']) 
