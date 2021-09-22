@@ -109,17 +109,17 @@ def handle_message(client, userdata, message):
        db.session.add(new_sensor)
        db.session.commit()
   
- @mqtt.on_subscribe()
- def handle_subscribe(client, userdata, mid, granted_qos):
-     print('on_subscribe client : {} userdata :{} mid :{} granted_qos:{}'.format(client, userdata, mid, granted_qos))
+@mqtt.on_subscribe()
+def handle_subscribe(client, userdata, mid, granted_qos):
+ print('on_subscribe client : {} userdata :{} mid :{} granted_qos:{}'.format(client, userdata, mid, granted_qos))
 
- @mqtt.on_disconnect()
- def handle_disconnect(client, userdata, rc):
-     print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
+@mqtt.on_disconnect()
+def handle_disconnect(client, userdata, rc):
+ print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
 
- @mqtt.on_log()
- def handle_logging(client, userdata, level, buf):
-     print(level, buf)
+@mqtt.on_log()
+def handle_logging(client, userdata, level, buf):
+ print(level, buf)
 
 
 
