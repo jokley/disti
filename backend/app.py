@@ -265,5 +265,5 @@ def handle_car(car_id):
         return {"message": f"Car {car.name} successfully deleted."}
     
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="127.0.0.1", debug=True)
         #db.create_all()
