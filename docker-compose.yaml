@@ -32,7 +32,7 @@ services:
       example-network:  
         ipv4_address: 172.16.238.11
   
-    mqtt:
+  mqtt:
     #image: mjenz/rpi-mosquitto:latest
     image: eclipse-mosquitto
     container_name: mqtt-broker
