@@ -92,10 +92,13 @@ class CarsModel(db.Model):
         return f"<Car {self.name}>"
 
 
-@mqtt.on_connect()
-def handle_connect(client, userdata, flags, rc):
-   mqtt.subscribe("/sensors")
-
+#@mqtt.on_connect()
+#def handle_connect(client, userdata, flags, rc):
+   #mqtt.subscribe("/sensors")
+    
+mqtt.subscribe("/sensors")
+    
+    
 #@mqtt.on_message()
 #def handle_message(client, userdata, message):
    #print(message.payload , flush=True)
