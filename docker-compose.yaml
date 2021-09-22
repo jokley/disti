@@ -37,6 +37,7 @@ services:
     container_name: mqtt-broker
     ports:
       - 1883:1883
+    networks:
       example-network:  
         ipv4_address: 172.16.238.12
 
