@@ -95,10 +95,11 @@ class CarsModel(db.Model):
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
    mqtt.subscribe("/sensors")
-  
+  flush=True
 
 @mqtt.on_message()
 def handle_message(client, userdata, message):
+   print(message.payload , flush=True)
    if message.topic == "/sensors":
        data = json.loads(message.payload)
        if data['type'] == "ds18b20":
