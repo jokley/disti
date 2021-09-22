@@ -31,6 +31,18 @@ services:
     networks:
       example-network:  
         ipv4_address: 172.16.238.11
+  
+    mqtt:
+    #image: mjenz/rpi-mosquitto:latest
+    image: eclipse-mosquitto
+    container_name: mqtt-broker
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    networks:
+      example-network:  
+        ipv4_address: 172.16.238.12
         
   backend:
     image: flask
@@ -42,18 +54,6 @@ services:
       - "5000:5000"
     networks:
       example-network:
-        ipv4_address: 172.16.238.12
-        
-  mqtt:
-    #image: mjenz/rpi-mosquitto:latest
-    image: eclipse-mosquitto
-    container_name: mqtt-broker
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
-    networks:
-      example-network:  
         ipv4_address: 172.16.238.13
 
   frontend:
