@@ -76,7 +76,7 @@ services:
       - ./conf.d:/nginx/conf.d
      networks:
       example-network:
-        ipv4_address: 172.16.238.14
+        ipv4_address: 172.16.238.15
 
 networks:
   example-network:
