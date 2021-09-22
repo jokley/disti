@@ -266,4 +266,4 @@ def handle_car(car_id):
     
 if __name__ == "__main__":
     
-    db.create_all()
+    #db.create_all()
