@@ -33,12 +33,13 @@ services:
         ipv4_address: 172.16.238.11
         
   mqtt:
-    image: mjenz/rpi-mosquitto:latest
+    #image: mjenz/rpi-mosquitto:latest
+    image: eclipse-mosquitto
     container_name: mqtt-broker
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
     networks:
       example-network:  
         ipv4_address: 172.16.238.12
