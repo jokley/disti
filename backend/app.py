@@ -102,25 +102,25 @@ mqtt.subscribe("/sensors")
 @mqtt.on_message()
 def handle_message(client, userdata, message):
    if message.topic == "/sensors":
-       print(message.payload.decode())
+       #print(message.payload.decode())
        data = json.loads(message.payload.decode())
        if data['type'] == "ds18b20":
-           new_sensor =  Sensor(name=data['sensor'],type=data['type'], temp=data['temp']) 
+           new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp']) 
        elif data['type'] == "si7021":
-           new_sensor =  Sensor(name=data['sensor'],type=data['type'],temp=data['temp'],humi=data['humi'])   
+           new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'])   
        
        db.session.add(new_sensor)
        db.session.commit()
         
         
 @mqtt.on_connect()
-def handle_connect(client, userdata, flags, rc):
-    print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-    mqtt.subscribe("/sensors")
+#def handle_connect(client, userdata, flags, rc):
+    #print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
+    #mqtt.subscribe("/sensors")
 
-@mqtt.on_subscribe()
-def handle_subscribe(client, userdata, mid, granted_qos):
-    print('on_subscribe client : {} userdata :{} mid :{} granted_qos:{}'.format(client, userdata, mid, granted_qos))
+#@mqtt.on_subscribe()
+#def handle_subscribe(client, userdata, mid, granted_qos):
+    #print('on_subscribe client : {} userdata :{} mid :{} granted_qos:{}'.format(client, userdata, mid, granted_qos))
 
 
 #@mqtt.on_message()
@@ -133,9 +133,9 @@ def handle_subscribe(client, userdata, mid, granted_qos):
     #print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
     
 
-@mqtt.on_log()
-def handle_logging(client, userdata, level, buf):
-    print(level, buf)
+#@mqtt.on_log()
+#def handle_logging(client, userdata, level, buf):
+    #print(level, buf)
 
 
 
