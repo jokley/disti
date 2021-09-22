@@ -32,17 +32,17 @@ services:
       example-network:  
         ipv4_address: 172.16.238.11
         
-  backend:
-    image: flask
-    container_name: flask-backend
-    build:
-      context: ./backend
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
-    networks:
-      example-network:
-        ipv4_address: 172.16.238.12
+  #backend:
+    #image: flask
+    #container_name: flask-backend
+    #build:
+      #context: ./backend
+    #restart: unless-stopped
+    #ports:
+      #- "5000:5000"
+    #networks:
+      #example-network:
+        #ipv4_address: 172.16.238.12
         
   mqtt:
     #image: mjenz/rpi-mosquitto:latest
