@@ -48,7 +48,7 @@ class Sensor(db.Model):
     type = db.Column(db.String(80), nullable=False)
     temp = db.Column(db.Float(2), nullable=True)
     humi = db.Column(db.Float(2), nullable=True)
-    date = db.Column(db.DateTime(), default=get_timestamp_now(),onupdate=get_timestamp_now())
+    date = db.Column(db.DateTime(), server_default=get_timestamp_now(),onupdate=get_timestamp_now())
 
     # def __init__(self, name, type,temp,humi=None):
     #     self.name = name
