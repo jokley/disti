@@ -48,7 +48,7 @@ class Sensor(db.Model):
     type = db.Column(db.String(80), nullable=False)
     temp = db.Column(db.Float(2), nullable=True)
     humi = db.Column(db.Float(2), nullable=True)
-    date = db.Column(db.DateTime, server_default=get_timestamp_now(),onupdate=get_timestamp_now())
+    date = db.Column(db.DateTime(), nullable=False)
 
     # def __init__(self, name, type,temp,humi=None):
     #     self.name = name
@@ -117,9 +117,9 @@ def handle_message(client, userdata, message):
        #print(message.payload.decode())
        data = json.loads(message.payload.decode())
        if data['type'] == "ds18b20":
-           new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp']) 
+           new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp'],date=get_timestamp_now()) 
        elif data['type'] == "si7021":
-           new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'])   
+           new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
        
        db.session.add(new_sensor)
        db.session.commit()
@@ -188,9 +188,9 @@ def handle_senors():
         if request.is_json:
             data = request.get_json()
             if data['type'] == "ds18b20":
-                new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp']) 
+                new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp'],date=get_timestamp_now()) 
             elif data['type'] == "si7021":
-                new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'])   
+                new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
 
             db.session.add(new_sensor)
             db.session.commit()
@@ -228,10 +228,12 @@ def handle_sensor(senors_id):
         if data['type'] == "ds18b20":
             sensor.name = data['name']
             sensor.temp = data['temp']
+            sensor.date = get_timestamp_now()
         elif data['type'] == "si7021":
             sensor.name = data['name']
             sensor.temp = data['temp']
             sensor.humi = data['humi']
+            sensor.date = get_timestamp_now()
 
         db.session.add(sensor)
         db.session.commit()
