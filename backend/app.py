@@ -8,9 +8,21 @@ from flask_cors import CORS
 from flask_mqtt import Mqtt
 
 
-TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
-TIMESTAMP_NOW_OFFSET = pytz.timezone("Europe/Berlin").utcoffset(datetime.now()).total_seconds()
-TIMESTAMP_NOW_EPOCHE = int(datetime.now().timestamp()+TIMESTAMP_NOW_OFFSET)  
+#TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
+#TIMESTAMP_NOW_OFFSET = pytz.timezone("Europe/Berlin").utcoffset(datetime.now()).total_seconds()
+#TIMESTAMP_NOW_EPOCHE = int(datetime.now().timestamp()+TIMESTAMP_NOW_OFFSET)  
+
+def get_timestamp_now():
+    TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
+    return TIMESTAMP_NOW
+
+def get_timestamp_now_offset():
+    TIMESTAMP_NOW_OFFSET = pytz.timezone("Europe/Berlin").utcoffset(datetime.now()).total_seconds()
+    return TIMESTAMP_NOW_OFFSET
+
+def get_timestamp_now_epoche():
+    TIMESTAMP_NOW_EPOCHE = int(datetime.now().timestamp()+get_timestamp_now_offset())
+    return TIMESTAMP_NOW_EPOCHE 
 
 
 app = Flask(__name__)
@@ -36,7 +48,7 @@ class Sensor(db.Model):
     type = db.Column(db.String(80), nullable=False)
     temp = db.Column(db.Float(2), nullable=True)
     humi = db.Column(db.Float(2), nullable=True)
-    date = db.Column(db.DateTime(), default=TIMESTAMP_NOW,onupdate=TIMESTAMP_NOW)
+    date = db.Column(db.DateTime(), default=get_timestamp_now(),onupdate=get_timestamp_now())
 
     # def __init__(self, name, type,temp,humi=None):
     #     self.name = name
@@ -145,7 +157,7 @@ def home():
 
 @app.route('/time')
 def time():
-    return jsonify(TIMESTAMP_NOW_EPOCHE,TIMESTAMP_NOW,TIMESTAMP_NOW_OFFSET)
+    return jsonify(get_timestamp_now_epoche(),get_timestamp_now(),get_timestamp_now_offset())
 
  
 @app.route("/persons")
@@ -187,11 +199,11 @@ def handle_senors():
             return {"error": "The request payload is not in JSON format"}
 
     elif request.method == 'GET':
-        FROM =request.args.get('from', default = TIMESTAMP_NOW_EPOCHE-36000, type = int)
-        TO = request.args.get('to', default = TIMESTAMP_NOW_EPOCHE, type = int)
+        FROM =request.args.get('from', default = get_timestamp_now_epoche()-36000, type = int)
+        TO = request.args.get('to', default = get_timestamp_now_epoche(), type = int)
 
-        VON = datetime.fromtimestamp(int(FROM + TIMESTAMP_NOW_OFFSET)).isoformat()
-        BIS = datetime.fromtimestamp(int(TO + TIMESTAMP_NOW_OFFSET)).isoformat()  
+        VON = datetime.fromtimestamp(int(FROM + get_timestamp_now_offset())).isoformat()
+        BIS = datetime.fromtimestamp(int(TO + get_timestamp_now_offset())).isoformat()  
 
         all_senors = Sensor.query.filter(Sensor.date >= VON).filter(Sensor.date<=BIS).all()
     return jsonify(sensors_schema.dump(all_senors))
