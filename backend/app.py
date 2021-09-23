@@ -31,7 +31,7 @@ CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@postgres/flasksql'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-app.config['MQTT_BROKER_URL'] = "10.1.10.204"
+app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_KEEPALIVE'] =20
 
