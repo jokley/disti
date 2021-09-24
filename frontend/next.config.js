@@ -6,6 +6,6 @@ module.exports = {
     ignoreDuringBuilds: true,
   },
   env: {
-    backendUrl: 'http://172.16.238.13:5000/sensors',
+    backendUrl: 'http://172.16.238.13:5000',
   },
 }
