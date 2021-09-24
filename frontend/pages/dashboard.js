@@ -4,6 +4,7 @@ import ExampleChart from "../components/LineGraph";
 import {options} from "../components/ChartOptions"
 import useSWR from 'swr'
 
+
 const useStyles = makeStyles({
   root: {
     background: 'linear-gradient(45deg, #B9E4F5 30%, #72ADC4 90%)',
@@ -34,10 +35,8 @@ export default function App() {
 
   };
   
-  if (typeof window !== 'undefined') {
-   const hostname = window.location.hostname;
-  }
-  const url = (`http://${hostname}:5000/sensors?from=${from}&to=${to}`);
+  const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '';
+  const url = (`${hostname}:5000/sensors?from=${from}&to=${to}`);
 
   const { data, error } = useSWR(url);
 
