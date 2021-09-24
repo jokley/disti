@@ -33,7 +33,11 @@ export default function App() {
     setFrom(TimestampNow-36000)
 
   };
-  const url = (`http://${window.location.hostname}:5000/sensors?from=${from}&to=${to}`);
+  
+  if (typeof window !== 'undefined') {
+   const hostname = window.location.hostname;
+  }
+  const url = (`http://${hostname}:5000/sensors?from=${from}&to=${to}`);
 
   const { data, error } = useSWR(url);
 
