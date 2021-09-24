@@ -5,4 +5,7 @@ module.exports = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
+  env: {
+    backendUrl: 'http://172.16.238.13:5000/sensors',
+  },
 }
