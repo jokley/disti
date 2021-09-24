@@ -35,8 +35,7 @@ export default function App() {
 
   };
   
-  const hostname = typeof window !== 'undefined' ? window.hostname : '';
-  const url = (`${hostname}:5000/sensors?from=${from}&to=${to}`);
+  const url = (`https://unrated-mallard-4700.dataplicity.io/sensors?from=${from}&to=${to}`);
 
   const { data, error } = useSWR(url);
 
