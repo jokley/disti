@@ -35,7 +35,7 @@ export default function App() {
 
   };
   
-  const hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '';
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const url = (`${hostname}:5000/sensors?from=${from}&to=${to}`);
 
   const { data, error } = useSWR(url);
