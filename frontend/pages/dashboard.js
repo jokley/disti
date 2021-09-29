@@ -129,7 +129,7 @@ export default function App() {
   
   return (
     
-    <div className="App">
+    <div>
       <Grid  container
         direction="row"
         justifyContent="space-around"
@@ -173,9 +173,13 @@ export default function App() {
        
 
       <Grid  container
-        direction="row"
+        //direction="column"
+        //columns={{ xs: 4, sm: 8, md: 12 }}
         justifyContent="space-around"
-        alignItems="center">
+        alignItems="center"
+        style={{ gap: 15 }}>
+        
+        <Grid Grid item xs={10} sm={10} md={5}>
        <Card className={classes.root}>
       <CardHeader 
         avatar={
@@ -191,6 +195,8 @@ export default function App() {
       <ExampleChart label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options} />
       </CardContent>
       </Card>
+      </Grid>
+      <Grid Grid item xs={10} sm={10} md={5}>
       <Card className={classes.root}>
       <CardHeader 
         avatar={
@@ -206,6 +212,8 @@ export default function App() {
       <ExampleChart label ='Boiler Top' data={SensorDataBoilerTop} labels={SensorLabel} options={options} />
       </CardContent>
       </Card>
+      </Grid>
+      <Grid Grid item xs={10} sm={10} md={5}>
       <Card className={classes.root}>
       <CardHeader 
         avatar={
@@ -221,7 +229,9 @@ export default function App() {
       <ExampleChart label ='Cooler In' data={SensorDataCoolerIn} labels={SensorLabel} options={options} />
       </CardContent>
       </Card>
-      <Card className={classes.root}>
+      </Grid>
+      <Grid Grid item xs={10} sm={10} md={5}>
+      <Card className={classes.root} >
       <CardHeader 
         avatar={
           <Avatar  variant="rounded" style={{color:'#B9E4F5', background:' #72ADC4'}}>
@@ -236,7 +246,7 @@ export default function App() {
       <ExampleChart label ='Cooler Out' data={SensorDataCoolerOut} labels={SensorLabel} options={options} />
       </CardContent>
       </Card>
-       
+      </Grid>
       </Grid>
      
     </div>
