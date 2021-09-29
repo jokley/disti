@@ -11,6 +11,8 @@ const ExmapleChart = ({ label, data,labels,options }) => {
     if (!chartRef) return;
     const ctx = chartRef.current.getContext("2d");
     const gradient = ctx.createLinearGradient(0, 0, 0, 450);
+    // ctx.canvas.parentNode.style.width = "80vh";
+    // ctx.canvas.parentNode.style.height = "20vh";
 
 
     gradient.addColorStop(0, 'rgba(20, 120,175, 0.5)');
@@ -45,7 +47,15 @@ const ExmapleChart = ({ label, data,labels,options }) => {
     myChart.update();
   }, [data,myChart]);
 
-  return <canvas ref={chartRef} id="myChart" position="relative" height="150vh" width="300vw"  />;
+  return (
+    <div
+    position='relative'
+    margin='auto'
+    height= '40vh'
+    width='80vw' >
+    <canvas ref={chartRef} id="myChart"  />
+  </div>
+  )
 };
 
 export default ExmapleChart;
