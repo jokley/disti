@@ -8,7 +8,7 @@ export const options = {
         display: false
     },
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     scales: {
         xAxes: [{
             type: 'time',
