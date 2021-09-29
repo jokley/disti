@@ -15,7 +15,7 @@ const ExmapleChart = ({ label, data,labels,options }) => {
 
     gradient.addColorStop(0, 'rgba(20, 120,175, 0.5)');
     gradient.addColorStop(0.5, 'rgba(20, 120, 175, 0.25)');
-    gradient.addColorStop(1, 'rgba(20, 120, 175, 0)');
+    gradient.addColorStop(1, 'rgba(20, 120, 175, 0.125)');
 
 
     const myChart = new Chart(ctx, {
@@ -26,9 +26,10 @@ const ExmapleChart = ({ label, data,labels,options }) => {
           {
             label: label,
             data: [],
-            backgroundColor: gradient,
+            fill: false,
+            //backgroundColor: 'white',
             borderColor: gradient,
-            borderWidth: 1
+            borderWidth: 5
           }
         ]
       },
@@ -42,9 +43,9 @@ const ExmapleChart = ({ label, data,labels,options }) => {
     if (!myChart) return;
     myChart.data.datasets[0].data = data;
     myChart.update();
-  }, [data,  myChart]);
+  }, [data,myChart]);
 
-  return <canvas ref={chartRef} id="myChart" width="450" height="400" />;
+  return <canvas ref={chartRef} id="myChart" position="relative" height="150vh" width="300vw"  />;
 };
 
 export default ExmapleChart;
