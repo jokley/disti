@@ -4,18 +4,41 @@ export const options = {
             radius: 0
         }
     },
+    legend: {
+        display: false
+    },
     responsive: true,
     maintainAspectRatio: true,
     scales: {
         xAxes: [{
-            ticks: { display: true },
+            type: 'time',
+            distrubution: 'linear',
+            ticks: { 
+                display: true 
+            },
             gridLines: {
-                display: true,
-                drawBorder: true
+                display: false,
+                drawBorder: false
+            },
+            time: {
+                tooltipFormat: 'HH:mm',
+                unit: 'minute',
+                autoSkip: false,
+                source: 'labels',
+                stepSize: 10,
+                displayFormats: {
+                    'minute': 'HH:mm',
+                    'hour': 'HH:mm'
+                },
             }
         }],
         yAxes: [{
-            ticks: { display: true },
+            ticks: { 
+                display: true,
+                min: 0,
+              	max: 100,
+              	stepSize: 25 
+            },
             gridLines: {
                 display: true,
                 drawBorder: true
