@@ -51,7 +51,7 @@ const ExmapleChart = ({ label, data,labels,options }) => {
     <div
     position='relative'
     margin='auto'
-    height= '40vh'
+    height= '20vh'
     width='80vw' >
     <canvas ref={chartRef} id="myChart"  />
   </div>
