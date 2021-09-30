@@ -31,7 +31,7 @@ const ExmapleChart = ({ label, data,labels,options }) => {
             fill: false,
             //backgroundColor: 'white',
             borderColor: gradient,
-            borderWidth: 5
+            borderWidth: 4
           }
         ]
       },
