@@ -9,6 +9,7 @@ import ExampleChart from "../components/LineGraph";
 import {options} from "../components/ChartOptions"
 import useSWR from 'swr'
 import { Box } from "@mui/system";
+import { formatISO9075 } from "date-fns";
 
 
 const useStyles = makeStyles({
@@ -31,12 +32,9 @@ const useStyles = makeStyles({
 });
 
 
-const TimestampNow = Math.round(new Date().getTime()/1000);
-
-
 export default function App() {
   
-  
+  var TimestampNow = Math.round(new Date().getTime()/1000);
   
   const classes = useStyles();
   const theme = useTheme();
@@ -47,11 +45,9 @@ export default function App() {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
  
- 
-  
   const url = (`https://unrated-mallard-4700.dataplicity.io/sensors?from=${from}&to=${to}`);
 
-  const { data, error } = useSWR(url);
+  const { data, error } = useSWR(url,{ refreshInterval: 1000 });
 
   if (error) return <h1>Something went wrong!</h1>
   if (!data) return ( 
@@ -67,11 +63,7 @@ export default function App() {
                   );
 
 
-                  
-  
-  
-  
-  const SensorLabel = data.filter((item)=> item.name === 'Boiler Top').map((item)=> new Date (item.date));
+  const SensorLabel = data.filter((item)=> item.name === 'Boiler Top').map((item)=> formatISO9075(new Date (item.date),{ representation: 'time' }));
 
   const SensorDataBoilerBottom = data.filter((item)=> item.name === 'Boiler Bottom').map((item)=> item.temp)
   const SensorDataBoilerBottomMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
@@ -93,6 +85,7 @@ export default function App() {
   const SensorDataCoolerOutMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
   const SensorDataCoolerOutCurrent=  Math.round(data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp).slice(-1)[0])
 
+
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
@@ -108,9 +101,7 @@ export default function App() {
   const handleprevious = () => {
    
       setTo(to+(3600*range))
-      setFrom(from+(3600*range))
-  
-      
+      setFrom(from+(3600*range)) 
   };
 
   const handlenext = () => {
@@ -118,14 +109,8 @@ export default function App() {
     setTo(to-(3600*range))
     setFrom(from-(3600*range))
     
-   
-};
-
-
-  const handleData = () => {
-    setFrom(TimestampNow-36000)
-
   };
+
   
   return (
     
@@ -239,7 +224,7 @@ export default function App() {
         </Avatar>
         }
       
-        title={`Coller Out: ${SensorDataCoolerOutCurrent}°C`} 
+        title={`Cooler Out: ${SensorDataCoolerOutCurrent}°C`} 
         subheader={`Min: ${SensorDataCoolerOutMin}°C  Max: ${SensorDataCoolerOutMax}°C`} 
       />
       <CardContent>
