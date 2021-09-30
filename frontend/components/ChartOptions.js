@@ -11,8 +11,8 @@ export const options = {
     maintainAspectRatio: false,
     scales: {
         xAxes: [{
-            type: 'time',
-            distrubution: 'linear',
+            // type: 'time',
+            // distrubution: 'linear',
             ticks: { 
                 display: true 
             },
@@ -20,17 +20,17 @@ export const options = {
                 display: false,
                 drawBorder: false
             },
-            time: {
-                tooltipFormat: 'HH:mm',
-                unit: 'minute',
-                autoSkip: false,
-                source: 'labels',
-                stepSize: 10,
-                displayFormats: {
-                    'minute': 'HH:mm',
-                    'hour': 'HH:mm'
-                },
-            }
+            // time: {
+            //     tooltipFormat: 'HH:mm',
+            //     unit: 'minute',
+            //     autoSkip: false,
+            //     source: 'labels',
+            //     stepSize: 10,
+            //     displayFormats: {
+            //         'minute': 'HH:mm',
+            //         'hour': 'HH:mm'
+            //     },
+            // }
         }],
         yAxes: [{
             ticks: { 
