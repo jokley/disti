@@ -45,7 +45,7 @@ export default function App() {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
  
-  const url = (`https://unrated-mallard-4700.dataplicity.io/sensors?from=${from}&to=${to}`);
+  const url = (`https://unrated-mallard-4700.dataplicity.io/api/sensors?from=${from}&to=${to}`);
 
   const { data, error } = useSWR(url,{ refreshInterval: 1000 });
 
