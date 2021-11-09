@@ -21,7 +21,7 @@ export default function Home() {
   const addCar = async event => {
     event.preventDefault()
 
-    const res = await fetch('http://10.1.10.204:5000/cars', {
+    const res = await fetch('https://unrated-mallard-4700.dataplicity.io/cars', {
       body: JSON.stringify({
         name: event.target.name.value,
         model:event.target.model.value,
@@ -46,7 +46,7 @@ export default function Home() {
 
     
 
-    const res = await fetch(`http://10.1.10.204:5000/cars/${carId}`, {
+    const res = await fetch(`https://unrated-mallard-4700.dataplicity.io/cars/${carId}`, {
       body: JSON.stringify({
         name: 'test_name',
         model:'test_model',
@@ -69,7 +69,7 @@ export default function Home() {
 
     const carId = event.currentTarget.value
 
-    const res = await fetch(`http://10.1.10.204:5000/cars/${carId}`, {
+    const res = await fetch(`https://unrated-mallard-4700.dataplicity.io/cars/${carId}`, {
       // body: JSON.stringify({
       //   name: event.target.name.value,
       //   model:event.target.model.value,
@@ -88,7 +88,7 @@ export default function Home() {
     
   }
 
-  const url = (`http://10.1.10.204:5000/cars`);
+  const url = (`https://unrated-mallard-4700.dataplicity.io/cars`);
 
   const { data, error, mutate } = useSWR(url,{refreshInterval: 1000});
 
