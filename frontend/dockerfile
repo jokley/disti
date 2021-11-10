@@ -1,7 +1,7 @@
 #FROM node:alpine as BUILD_IMAGE
 #FROM arm32v7/node as BUILD_IMAGE
 #FROM hypriot/rpi-node as BUILD_IMAGE
-FROM arm32v6/node:alpine3.12 as BUILD_IMAGE
+FROM arm32v6/node:lts-alpine3.12 as BUILD_IMAGE
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ COPY package.json package-lock.json ./
 
 # install dependencies
 RUN npm install
-RUN npm install -g npm@8.1.3
+
 
 COPY . .
 
@@ -19,7 +19,7 @@ RUN npm run build
 # remove dev dependencies
 RUN npm prune --production
 
-FROM arm32v6/node:alpine3.12
+FROM arm32v6/node:lts-alpine3.12
 
 WORKDIR /app
 
