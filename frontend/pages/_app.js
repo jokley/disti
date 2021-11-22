@@ -1,3 +1,4 @@
+import { Provider } from 'next-auth/client';
 import Head from 'next/head';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -19,6 +20,7 @@ export default function MyApp(props) {
   const { Component, emotionCache = clientSideEmotionCache, pageProps } = props;
 
   return (
+    <Provider>
     <CacheProvider value={emotionCache}>
        <SWRConfig value={{ fetcher }}>
       <Head>
@@ -33,5 +35,6 @@ export default function MyApp(props) {
       </ThemeProvider>
       </SWRConfig>
     </CacheProvider>
+    </Provider>
   );
 }
