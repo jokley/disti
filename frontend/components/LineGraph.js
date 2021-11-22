@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import Chart from "chart.js";
 
 
-const ExmapleChart = ({ label, data,labels,options }) => {
+const ExmapleChart = ({ label, data,labels,options, style }) => {
   
   const chartRef = useRef(null);
   const [myChart, setMyChart] = useState(null);
@@ -11,9 +11,6 @@ const ExmapleChart = ({ label, data,labels,options }) => {
     if (!chartRef) return;
     const ctx = chartRef.current.getContext("2d");
     const gradient = ctx.createLinearGradient(0, 0, 0, 450);
-    // ctx.canvas.parentNode.style.width = "80vh";
-    // ctx.canvas.parentNode.style.height = "20vh";
-
 
     gradient.addColorStop(0, 'rgba(20, 120,175, 0.5)');
     gradient.addColorStop(0.5, 'rgba(20, 120, 175, 0.25)');
@@ -28,10 +25,10 @@ const ExmapleChart = ({ label, data,labels,options }) => {
           {
             label: label,
             data: [],
-            fill: false,
-            //backgroundColor: 'white',
-            borderColor: gradient,
-            borderWidth: 4
+            fill: true,
+            backgroundColor: gradient,
+            borderColor: 'grey',
+            borderWidth: 2
           }
         ]
       },
@@ -47,14 +44,21 @@ const ExmapleChart = ({ label, data,labels,options }) => {
     myChart.update();
   }, [data,myChart]);
 
-  return (
-    <div
+  if (style === 'normal') return ( <div
     position='relative'
     margin='auto'
     height= '20vh'
     width='80vw' >
-    <canvas ref={chartRef} id="myChart"  />
-  </div>
+
+   
+    <canvas  ref={chartRef} id="myChart"  />
+    </div>
+  )
+
+  if (style === 'mini') return ( 
+
+    <canvas  width='200'  height= '50' ref={chartRef} id="myChart"  />
+ 
   )
 };
 
