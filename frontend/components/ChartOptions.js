@@ -84,7 +84,7 @@ export const options = {
         yAxes: [{
             ticks: { 
                 display: false,
-                //min: 0,
+                min: 0,
               	//max: 100,
               	//stepSize: 100
             },
