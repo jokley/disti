@@ -5,7 +5,6 @@ import { CacheProvider } from '@emotion/react';
 import createEmotionCache from '../styles/createEmotionCache';
 
 import "../styles/globals.css";
-import '../styles/Timeline.css'
 import { SWRConfig } from 'swr'
 import theme from '../styles/theme';
 import Header from "@components/Header";
