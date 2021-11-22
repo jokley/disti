@@ -3,13 +3,18 @@ import { useTheme } from '@mui/material/styles';
 import DeviceThermostatOutlinedIcon from '@mui/icons-material/DeviceThermostatOutlined';
 import DateRangeOutlinedIcon from '@mui/icons-material/DateRangeOutlined';
 import SkipPreviousIcon from '@mui/icons-material/SkipPrevious';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
 import React, { useState } from "react";
 import ExampleChart from "../components/LineGraph";
-import {options} from "../components/ChartOptions"
+import {options, options_simple} from "../components/ChartOptions"
 import useSWR from 'swr'
 import { Box } from "@mui/system";
 import { formatISO9075 } from "date-fns";
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { CardActions, Collapse } from "@mui/material";
+import { styled } from '@mui/material/styles';
+
 
 
 const useStyles = makeStyles({
@@ -31,10 +36,24 @@ const useStyles = makeStyles({
   
 });
 
+const ExpandMore = styled((props) => {
+  const { expand, ...other } = props;
+  return <IconButton {...other} />;
+})(({ theme, expand }) => ({
+  transform: !expand ? 'rotate(0deg)' : 'rotate(180deg)',
+  marginLeft: 'auto',
+  transition: theme.transitions.create('transform', {
+    duration: theme.transitions.duration.shortest,
+  }),
+}));
+
+
+
+
 
 export default function App() {
   
-  var TimestampNow = Math.round(new Date().getTime()/1000);
+  const TimestampNow = Math.round(new Date().getTime()/1000);
   
   const classes = useStyles();
   const theme = useTheme();
@@ -43,11 +62,15 @@ export default function App() {
   const [from, setFrom] = useState(TimestampNow-3600);
   const [range, setRange] = useState(1);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [expanded, setExpanded] = React.useState(false);
   const open = Boolean(anchorEl);
+  
  
+ 
+  
   const url = (`https://unrated-mallard-4700.dataplicity.io/api/sensors?from=${from}&to=${to}`);
 
-  const { data, error } = useSWR(url,{ refreshInterval: 1000 });
+  const { data, error } = useSWR(url,{refreshInterval: 1000});
 
   if (error) return <h1>Something went wrong!</h1>
   if (!data) return ( 
@@ -63,7 +86,11 @@ export default function App() {
                   );
 
 
-  const SensorLabel = data.filter((item)=> item.name === 'Boiler Top').map((item)=> formatISO9075(new Date (item.date),{ representation: 'time' }));
+                  
+  
+  
+  
+  const SensorLabel = data.filter((item)=> item.name === 'Boiler Top').map((item)=> formatISO9075(new Date (item.date),{ representation: 'time'}));
 
   const SensorDataBoilerBottom = data.filter((item)=> item.name === 'Boiler Bottom').map((item)=> item.temp)
   const SensorDataBoilerBottomMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
@@ -85,7 +112,6 @@ export default function App() {
   const SensorDataCoolerOutMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
   const SensorDataCoolerOutCurrent=  Math.round(data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp).slice(-1)[0])
 
-
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
@@ -101,7 +127,9 @@ export default function App() {
   const handleprevious = () => {
    
       setTo(to+(3600*range))
-      setFrom(from+(3600*range)) 
+      setFrom(from+(3600*range))
+  
+      
   };
 
   const handlenext = () => {
@@ -109,8 +137,16 @@ export default function App() {
     setTo(to-(3600*range))
     setFrom(from-(3600*range))
     
+   
+};
+
+
+
+  const handleExpandClick = () => {
+    setExpanded(!expanded);
   };
 
+  
   
   return (
     
@@ -155,6 +191,137 @@ export default function App() {
         </Box>
     
       </Grid>
+      <Grid  container
+         direction="row"
+         justifyContent="space-around"
+         alignItems="center"
+         style={{ gap: 15}}>
+      <Box
+      sx={{
+        bgcolor: 'background.paper',
+        boxShadow: 1,
+        borderRadius: 1,
+        p: 2,
+        width: 210 ,
+      }}
+      className={classes.root}
+    >
+      <Grid  container
+        
+        justifyContent="space-between"
+        alignItems="center">
+      <Grid>
+      <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Bottom</Box>
+      </Grid>
+      <Grid>
+      <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
+      {`${SensorDataBoilerBottomCurrent}°C`}
+      </Box>
+      </Grid>
+      </Grid>
+      <ExampleChart style='mini'  label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options_simple} />
+
+      <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
+      {`Min: ${SensorDataBoilerBottomMin}°C  Max: ${SensorDataBoilerBottomMax}°C`} 
+      </Box>
+    </Box>
+     
+      <Box
+      sx={{
+        bgcolor: 'background.paper',
+        boxShadow: 1,
+        borderRadius: 1,
+        p: 2,
+        width: 210 ,
+      }}
+      className={classes.root}
+    >
+      <Grid  container
+        
+        justifyContent="space-between"
+        alignItems="center">
+      <Grid>
+      <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Top</Box>
+      </Grid>
+      <Grid>
+      <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
+      {`${SensorDataBoilerBottomCurrent}°C`}
+      </Box>
+      </Grid>
+      </Grid>
+      <ExampleChart style='mini'  label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options_simple} />
+
+      <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
+      {`Min: ${SensorDataBoilerTopMin}°C  Max: ${SensorDataBoilerTopMax}°C`} 
+      </Box>
+    </Box>
+     
+    <Box
+      sx={{
+        bgcolor: 'background.paper',
+        boxShadow: 1,
+        borderRadius: 1,
+        p: 2,
+        width: 210 ,
+      }}
+      className={classes.root}
+    >
+      <Grid  container
+        
+        justifyContent="space-between"
+        alignItems="center">
+      <Grid>
+      <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Top</Box>
+      </Grid>
+      <Grid>
+      <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
+      {`${SensorDataBoilerBottomCurrent}°C`}
+      </Box>
+      </Grid>
+      </Grid>
+      <ExampleChart style='mini'  label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options_simple} />
+
+      <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
+      {`Min: ${SensorDataBoilerTopMin}°C  Max: ${SensorDataBoilerTopMax}°C`} 
+      </Box>
+    </Box>
+
+    <Box
+      sx={{
+        bgcolor: 'background.paper',
+        boxShadow: 1,
+        borderRadius: 1,
+        p: 2,
+        width: 210 ,
+      }}
+      className={classes.root}
+    >
+      <Grid  container
+        
+        justifyContent="space-between"
+        alignItems="center">
+      <Grid>
+      <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Top</Box>
+      </Grid>
+      <Grid>
+      <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
+      {`${SensorDataBoilerBottomCurrent}°C`}
+      </Box>
+      </Grid>
+      </Grid>
+      <ExampleChart style='mini'  label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options_simple} />
+
+      <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
+      {`Min: ${SensorDataBoilerTopMin}°C  Max: ${SensorDataBoilerTopMax}°C`} 
+      </Box>
+    </Box>
+
+    </Grid>
+  
+      
+     
+      <p></p>
+     
        
 
       <Grid  container
@@ -165,7 +332,7 @@ export default function App() {
         style={{ gap: 15 }}>
         
         <Grid Grid item xs={10} sm={10} md={5}>
-       <Card className={classes.root}>
+        <Card className={classes.root}>
       <CardHeader 
         avatar={
           <Avatar  variant="rounded" style={{color:'#B9E4F5', background:' #72ADC4'}}>
@@ -177,7 +344,7 @@ export default function App() {
         subheader={`Min: ${SensorDataBoilerBottomMin}°C  Max: ${SensorDataBoilerBottomMax}°C`} 
       />
       <CardContent>
-      <ExampleChart label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options} />
+      <ExampleChart style='normal' label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options} />
       </CardContent>
       </Card>
       </Grid>
@@ -194,7 +361,7 @@ export default function App() {
         subheader={`Min: ${SensorDataBoilerTopMin}°C  Max: ${SensorDataBoilerTopMax}°C`} 
       />
       <CardContent>
-      <ExampleChart label ='Boiler Top' data={SensorDataBoilerTop} labels={SensorLabel} options={options} />
+      <ExampleChart style='normal' label ='Boiler Top' data={SensorDataBoilerTop} labels={SensorLabel} options={options} />
       </CardContent>
       </Card>
       </Grid>
@@ -211,7 +378,7 @@ export default function App() {
         subheader={`Min: ${SensorDataCoolerInMin}°C  Max: ${SensorDataCoolerInMax}°C`} 
       />
       <CardContent>
-      <ExampleChart label ='Cooler In' data={SensorDataCoolerIn} labels={SensorLabel} options={options} />
+      <ExampleChart  style='normal' label ='Cooler In' data={SensorDataCoolerIn} labels={SensorLabel} options={options} />
       </CardContent>
       </Card>
       </Grid>
@@ -228,7 +395,7 @@ export default function App() {
         subheader={`Min: ${SensorDataCoolerOutMin}°C  Max: ${SensorDataCoolerOutMax}°C`} 
       />
       <CardContent>
-      <ExampleChart label ='Cooler Out' data={SensorDataCoolerOut} labels={SensorLabel} options={options} />
+      <ExampleChart  style='normal' label ='Cooler Out' data={SensorDataCoolerOut} labels={SensorLabel} options={options} />
       </CardContent>
       </Card>
       </Grid>
