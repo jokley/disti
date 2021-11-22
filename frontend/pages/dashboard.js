@@ -1,11 +1,11 @@
-import { Avatar, Card, CardContent, CardHeader, Grid, IconButton, LinearProgress, makeStyles, Menu, MenuItem} from "@material-ui/core";
+import { Avatar, Card, CardContent, CardHeader, Grid, IconButton, LinearProgress, makeStyles, Menu, MenuItem} from "@mui/material";
 import { useTheme } from '@mui/material/styles';
 import DeviceThermostatOutlinedIcon from '@mui/icons-material/DeviceThermostatOutlined';
 import DateRangeOutlinedIcon from '@mui/icons-material/DateRangeOutlined';
 import SkipPreviousIcon from '@mui/icons-material/SkipPrevious';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ExampleChart from "../components/LineGraph";
 import {options, options_simple} from "../components/ChartOptions"
 import useSWR from 'swr'
@@ -14,10 +14,11 @@ import { formatISO9075 } from "date-fns";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { CardActions, Collapse } from "@mui/material";
 import { styled } from '@mui/material/styles';
+import { getSession, signIn } from "next-auth/client";
 
 
 
-const useStyles = makeStyles({
+/* const useStyles = makeStyles({
   root: {
     background: 'linear-gradient(45deg, #B9E4F5 30%, #72ADC4 90%)',
     border: 0,
@@ -34,28 +35,23 @@ const useStyles = makeStyles({
     backgroundColor: '#72ADC4'
   }
   
-});
+}); */
 
-const ExpandMore = styled((props) => {
-  const { expand, ...other } = props;
-  return <IconButton {...other} />;
-})(({ theme, expand }) => ({
-  transform: !expand ? 'rotate(0deg)' : 'rotate(180deg)',
-  marginLeft: 'auto',
-  transition: theme.transitions.create('transform', {
-    duration: theme.transitions.duration.shortest,
-  }),
-}));
+
 
 
 
 
 
 export default function App() {
+
+  const [loading, setloading] = useState(true)
+
+
   
   const TimestampNow = Math.round(new Date().getTime()/1000);
   
-  const classes = useStyles();
+  //const classes = useStyles();
   const theme = useTheme();
   
   const [to,setTo] = useState(TimestampNow);
@@ -70,17 +66,33 @@ export default function App() {
   
   const url = (`https://unrated-mallard-4700.dataplicity.io/api/sensors?from=${from}&to=${to}`);
 
+   
   const { data, error } = useSWR(url,{refreshInterval: 1000});
+  
+
+  // useEffect(()=>{
+  //   const securePage = async() => {
+  //     const session = await getSession()
+  //     if(!session){
+  //       signIn()
+  //     }else {
+  //       setloading(false)
+  //     }
+  //   }
+  //   securePage()
+  // },[])
+
+  // if (loading){
+  //   return <h2>Loading...</h2>
+
+  // }
+
 
   if (error) return <h1>Something went wrong!</h1>
   if (!data) return ( 
                 <Box sx={{ width: '100%' }}>
                  <LinearProgress
-                 classes={{
-                 root: classes.root,
-                 colorPrimary: classes.colorPrimary,
-                 bar: classes.bar
-                }}
+               
                  />
               </Box>
                   );
@@ -146,6 +158,8 @@ export default function App() {
     setExpanded(!expanded);
   };
 
+
+  
   
   
   return (
@@ -204,7 +218,7 @@ export default function App() {
         p: 2,
         width: 210 ,
       }}
-      className={classes.root}
+     
     >
       <Grid  container
         
@@ -234,7 +248,7 @@ export default function App() {
         p: 2,
         width: 210 ,
       }}
-      className={classes.root}
+     
     >
       <Grid  container
         
@@ -264,7 +278,7 @@ export default function App() {
         p: 2,
         width: 210 ,
       }}
-      className={classes.root}
+     
     >
       <Grid  container
         
@@ -294,7 +308,7 @@ export default function App() {
         p: 2,
         width: 210 ,
       }}
-      className={classes.root}
+     
     >
       <Grid  container
         
@@ -332,7 +346,7 @@ export default function App() {
         style={{ gap: 15 }}>
         
         <Grid Grid item xs={10} sm={10} md={5}>
-        <Card className={classes.root}>
+        <Card>
       <CardHeader 
         avatar={
           <Avatar  variant="rounded" style={{color:'#B9E4F5', background:' #72ADC4'}}>
@@ -349,7 +363,7 @@ export default function App() {
       </Card>
       </Grid>
       <Grid Grid item xs={10} sm={10} md={5}>
-      <Card className={classes.root}>
+      <Card>
       <CardHeader 
         avatar={
           <Avatar  variant="rounded" style={{color:'#B9E4F5', background:' #72ADC4'}}>
@@ -366,7 +380,7 @@ export default function App() {
       </Card>
       </Grid>
       <Grid Grid item xs={10} sm={10} md={5}>
-      <Card className={classes.root}>
+      <Card>
       <CardHeader 
         avatar={
           <Avatar  variant="rounded" style={{color:'#B9E4F5', background:' #72ADC4'}}>
@@ -383,7 +397,7 @@ export default function App() {
       </Card>
       </Grid>
       <Grid Grid item xs={10} sm={10} md={5}>
-      <Card className={classes.root} >
+      <Card >
       <CardHeader 
         avatar={
           <Avatar  variant="rounded" style={{color:'#B9E4F5', background:' #72ADC4'}}>
