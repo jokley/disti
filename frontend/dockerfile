@@ -1,7 +1,7 @@
 #FROM node:alpine as BUILD_IMAGE
 #FROM arm32v7/node as BUILD_IMAGE
 #FROM hypriot/rpi-node as BUILD_IMAGE
-FROM arm32v6/node:12-alpine3.12 as BUILD_IMAGE
+FROM arm32v6/node:lts-alpine3.12 as BUILD_IMAGE
 
 
 WORKDIR /app
@@ -9,20 +9,20 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # install dependencies
-#RUN npm install -g npm@8.1.4
+RUN npm install -g npm@8.1.4
 RUN npm install
 
 COPY . .
 
 # build
 
-#RUN npm run build --max-old-space-size=8192
+RUN npm run build --max-old-space-size=512
 RUN npm run build
 
 # remove dev dependencies
 RUN npm prune --production
 
-FROM  arm32v6/node:12-alpine3.12
+FROM arm32v6/node:lts-alpine3.12 
 
 WORKDIR /app
 
