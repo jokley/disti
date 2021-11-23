@@ -22,7 +22,7 @@ RUN npm run build --max-old-space-size=8192
 # remove dev dependencies
 RUN npm prune --production
 
-FROM  mhart/alpine-node:14
+FROM  BUILD_IMAGE
 
 WORKDIR /app
 
