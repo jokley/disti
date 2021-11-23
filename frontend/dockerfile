@@ -16,8 +16,8 @@ COPY . .
 
 # build
 
-#RUN npm run build --node-flags --max-old-space-size=512 --no-warnings
-RUN npm run build
+RUN npm run build --max-old-space-size=4069 --no-warnings
+#RUN npm run build
 
 # remove dev dependencies
 RUN npm prune --production
