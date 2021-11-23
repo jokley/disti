@@ -17,7 +17,8 @@ COPY . .
 
 # build
 
-RUN npm run build --max-old-space-size=8192
+#RUN npm run build --max-old-space-size=8192
+RUN npm run build
 
 # remove dev dependencies
 RUN npm prune --production
