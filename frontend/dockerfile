@@ -12,7 +12,6 @@ COPY package.json package-lock.json ./
 #RUN npm install -g npm@8.1.4
 RUN npm install
 
-
 COPY . .
 
 # build
