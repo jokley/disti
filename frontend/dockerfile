@@ -1,7 +1,7 @@
 #FROM node:alpine as BUILD_IMAGE
 #FROM arm32v7/node as BUILD_IMAGE
 #FROM hypriot/rpi-node as BUILD_IMAGE
-#FROM arm32v6/node:14-alpine as BUILD_IMAGE
+FROM arm32v6/node:14-alpine as BUILD_IMAGE
 
 
 WORKDIR /app
