@@ -15,8 +15,8 @@ RUN npm install
 COPY . .
 
 # build
-ENV NODE_OPTIONS=--max_old_space_size=8192
-RUN npm run build
+
+RUN npm run build --max-old-space-size=512
 
 # remove dev dependencies
 RUN npm prune --production
