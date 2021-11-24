@@ -1,4 +1,4 @@
-import { Provider } from 'next-auth/client';
+import { SessionProvider } from "next-auth/react";
 import Head from 'next/head';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -11,16 +11,17 @@ import theme from '../styles/theme';
 import Header from "@components/Header";
 
 
+
 // Client-side cache, shared for the whole session of the user in the browser.
 const clientSideEmotionCache = createEmotionCache();
 
 const fetcher = (...args) => fetch(...args).then((res) => res.json())
 
 export default function MyApp(props) {
-  const { Component, emotionCache = clientSideEmotionCache, pageProps } = props;
+  const { Component, emotionCache = clientSideEmotionCache, pageProps, session } = props;
 
   return (
-    <Provider>
+    <SessionProvider session={session}>
     <CacheProvider value={emotionCache}>
        <SWRConfig value={{ fetcher }}>
       <Head>
@@ -35,6 +36,6 @@ export default function MyApp(props) {
       </ThemeProvider>
       </SWRConfig>
     </CacheProvider>
-    </Provider>
+    </SessionProvider>
   );
 }

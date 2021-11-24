@@ -14,7 +14,7 @@ import { formatISO9075 } from "date-fns";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { CardActions, Collapse } from "@mui/material";
 import { styled } from '@mui/material/styles';
-import { getSession, signIn } from "next-auth/client";
+import { useSession } from "next-auth/react"
 
 
 
@@ -45,7 +45,7 @@ import { getSession, signIn } from "next-auth/client";
 
 export default function App() {
 
-  const [loading, setloading] = useState(true)
+  //const [loading, setloading] = useState(true)
 
 
   

@@ -13,7 +13,7 @@ import KeyboardArrowUp from "@mui/icons-material/KeyboardArrowUp";
 import BackToTop from "./BackToTop";
 import { Avatar, Paper } from "@mui/material";
 import Image from 'next/image'
-import {signIn, signOut, useSession} from 'next-auth/client'
+import { useSession } from "next-auth/react"
 
 
 const Offset = styled("div")(({ theme }) => theme.mixins.toolbar);
@@ -35,7 +35,7 @@ export const navLinks = [
   
 
 const Header = () => {
-  const [session, loading] = useSession();
+  const { data: session, status,loading } = useSession()
  
   return (
     <>

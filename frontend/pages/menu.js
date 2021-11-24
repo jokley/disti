@@ -1,8 +1,8 @@
 import * as React from "react";
-import { useSession } from "next-auth/client"; 
+import { useSession } from "next-auth/react"
 
 const MenuPage = () => {
-  const [session, loading]= useSession()
+  const { data: session, status } = useSession()
 
   if (!session) {
     return (
