@@ -24,7 +24,7 @@ RUN npm prune --production
 FROM arm32v6/node:lts-alpine3.12
 #FROM mhart/alpine-node:14
 
-WORKDIR /app
+WORKDIR /app 
 
 # copy from build image
 COPY --from=BUILD_IMAGE /app/package.json ./package.json
