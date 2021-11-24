@@ -68,7 +68,7 @@ services:
       #example-network:
         #ipv4_address: 172.16.238.14
         
- frontend:
+  frontend:
     image: 2387040582/jokley-disti-next:0.0.1
     container_name: next-frontend
     restart: always
