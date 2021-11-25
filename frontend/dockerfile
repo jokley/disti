@@ -1,14 +1,17 @@
 #FROM node:alpine as BUILD_IMAGE
 #FROM arm32v7/node as BUILD_IMAGE
 #FROM hypriot/rpi-node as BUILD_IMAGE
-FROM arm32v6/node:alpine3.12 as BUILD_IMAGE
+FROM arm32v6/node:lts-alpine3.12 as BUILD_IMAGE
+#FROM mhart/alpine-node:14 as BUILD_IMAGE
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 
 # install dependencies
+RUN npm install -g npm@8.1.4
 RUN npm install
+
 
 COPY . .
 
@@ -18,15 +21,17 @@ RUN npm run build
 # remove dev dependencies
 RUN npm prune --production
 
-FROM arm32v6/node:alpine3.12
+FROM arm32v6/node:lts-alpine3.12
+#FROM mhart/alpine-node:14
 
-WORKDIR /app
+WORKDIR /app 
 
 # copy from build image
 COPY --from=BUILD_IMAGE /app/package.json ./package.json
 COPY --from=BUILD_IMAGE /app/node_modules ./node_modules
 COPY --from=BUILD_IMAGE /app/.next ./.next
 COPY --from=BUILD_IMAGE /app/public ./public
+COPY --from=BUILD_IMAGE /app/.env.local ./
 
 EXPOSE 3000
 CMD npm start

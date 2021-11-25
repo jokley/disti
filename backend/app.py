@@ -100,8 +100,13 @@ class CarsModel(db.Model):
         self.model = model
         self.doors = doors
 
-    def __repr__(self):
-        return f"<Car {self.name}>"
+class CarSchema(SQLAlchemyAutoSchema):
+    class Meta:
+        model = CarsModel
+        ordered = True
+
+car_schema = CarSchema()
+cars_schema = CarSchema(many=True)
 
 
 #@mqtt.on_connect()
@@ -258,15 +263,16 @@ def handle_cars():
             return {"error": "The request payload is not in JSON format"}
 
     elif request.method == 'GET':
-        cars = CarsModel.query.all()
-        results = [
-            {
-                "name": car.name,
-                "model": car.model,
-                "doors": car.doors
-            } for car in cars]
+        all_cars = CarsModel.query.all()
+        # results = [
+        #     {
+        #         "name": car.name,
+        #         "model": car.model,
+        #         "doors": car.doors
+        #     } for car in cars]
 
-        return {"count": len(results), "cars": results}
+        return jsonify(cars_schema.dump(all_cars))
+
 
 @app.route('/cars/<car_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_car(car_id):
