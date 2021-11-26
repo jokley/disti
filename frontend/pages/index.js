@@ -1,6 +1,5 @@
 import Head from 'next/head'
 import Image from 'next/image'
-import styles from '../styles/Home.module.css'
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -12,15 +11,14 @@ import useSWR from 'swr'
 import IconButton from '@mui/material/IconButton';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ModeEditOutlineOutlinedIcon from '@mui/icons-material/ModeEditOutlineOutlined';
-import { useSession } from 'next-auth/client';
-import { useCallback } from 'react';
+
 
 
 
 export default function Home() {
   
-  const[session,loading] = useSession()
-  console.log({session,loading})
+ 
+
   const addCar = async event => {
     event.preventDefault()
 
