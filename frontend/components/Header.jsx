@@ -13,7 +13,7 @@ import KeyboardArrowUp from "@mui/icons-material/KeyboardArrowUp";
 import BackToTop from "./BackToTop";
 import { Avatar, Paper } from "@mui/material";
 import Image from 'next/image'
-import {signIn, signOut, useSession} from 'next-auth/client'
+
 
 
 const Offset = styled("div")(({ theme }) => theme.mixins.toolbar);
@@ -35,7 +35,7 @@ export const navLinks = [
   
 
 const Header = () => {
-  const [session, loading] = useSession();
+
  
   return (
     <>
@@ -62,22 +62,7 @@ const Header = () => {
            
           </Container>
          
-          {!loading && !session && (
-             <IconButton
-            //  onClick={(e)=> {
-            //    e.preventDefault()
-            //    signIn('github')
- 
-            //      }}   
-           >
-            <MuiNextLink activeClassName="active" href="/api/auth/signin"  >
-              
-          <Avatar/>
-          </MuiNextLink>
-          </IconButton>
-           )}
 
-          {session && (
             <IconButton
             // onClick={(e)=> {
             //   e.preventDefault()
@@ -85,12 +70,12 @@ const Header = () => {
 
             //     }}   
           >
-            <MuiNextLink activeClassName="active" href="/api/auth/signout"  >
-            <Avatar sx={{ bgcolor: 'orange'}}>{session.user.name}</Avatar>
+            <MuiNextLink activeClassName="active" href="/"  >
+            <Avatar sx={{ bgcolor: 'orange'}}></Avatar>
           </MuiNextLink>
            
            </IconButton>
-           )}
+       
          
         </Toolbar>
       </StyledAppBar>
