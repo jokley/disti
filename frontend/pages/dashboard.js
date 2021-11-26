@@ -14,7 +14,6 @@ import { formatISO9075 } from "date-fns";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { CardActions, Collapse } from "@mui/material";
 import { styled } from '@mui/material/styles';
-import { getSession, signIn } from "next-auth/client";
 
 
 
@@ -40,15 +39,9 @@ import { getSession, signIn } from "next-auth/client";
 
 
 
-
-
-
 export default function App() {
 
-  const [loading, setloading] = useState(true)
 
-
-  
   const TimestampNow = Math.round(new Date().getTime()/1000);
   
   //const classes = useStyles();
@@ -62,31 +55,12 @@ export default function App() {
   const open = Boolean(anchorEl);
   
  
- 
   
   const url = (`https://unrated-mallard-4700.dataplicity.io/api/sensors?from=${from}&to=${to}`);
 
    
   const { data, error } = useSWR(url,{refreshInterval: 1000});
   
-
-  // useEffect(()=>{
-  //   const securePage = async() => {
-  //     const session = await getSession()
-  //     if(!session){
-  //       signIn()
-  //     }else {
-  //       setloading(false)
-  //     }
-  //   }
-  //   securePage()
-  // },[])
-
-  // if (loading){
-  //   return <h2>Loading...</h2>
-
-  // }
-
 
   if (error) return <h1>Something went wrong!</h1>
   if (!data) return ( 
@@ -98,10 +72,7 @@ export default function App() {
                   );
 
 
-                  
-  
-  
-  
+                
   const SensorLabel = data.filter((item)=> item.name === 'Boiler Top').map((item)=> formatISO9075(new Date (item.date),{ representation: 'time'}));
 
   const SensorDataBoilerBottom = data.filter((item)=> item.name === 'Boiler Bottom').map((item)=> item.temp)
