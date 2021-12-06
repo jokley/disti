@@ -8,6 +8,7 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: root@root.com
       PGADMIN_DEFAULT_PASSWORD: root
+      SCRIPT_NAME: /pgadmin4
     volumes:
       - pgadmin-data:/var/lib/pgadmin
     ports:
