@@ -58,15 +58,18 @@ services:
 
   frontend:
     image: nextjs
+    image: jokley/disti-nextjs
     container_name: next-frontend
-    build:
-      context: ./frontend
+    privileged: true
+    #build:
+      #context: ./frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
     networks:
       example-network:
         ipv4_address: 172.16.238.14
+        
         
   nginx:
     image: arm32v6/nginx:alpine
