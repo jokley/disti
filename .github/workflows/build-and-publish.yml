@@ -2,9 +2,9 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ development ]
+    branches: [ development, dev, qa, latest ]
   pull_request:
-    branches: [ development ]
+    branches: [ development, dev, qa, latest ]
 
 jobs:
 
@@ -32,4 +32,4 @@ jobs:
           context: ./frontend
           file: ./frontend/dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_USER }}/disti-nextjs:latest
+          tags: ${{ secrets.DOCKER_USER }}/disti-nextjs:${GITHUB_REF##*/}
