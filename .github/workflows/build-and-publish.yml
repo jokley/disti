@@ -32,4 +32,4 @@ jobs:
           context: ./frontend
           file: ./frontend/dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_USER }}/disti-nextjs:${GITHUB_REF##*/} .
+          tags: ${{ secrets.DOCKER_USER }}/disti-nextjs:${{GITHUB_REF_NAME}}
