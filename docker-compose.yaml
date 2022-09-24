@@ -8,7 +8,6 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: root@root.com
       PGADMIN_DEFAULT_PASSWORD: root
-      SCRIPT_NAME: /pgadmin4
     volumes:
       - pgadmin-data:/var/lib/pgadmin
     ports:
@@ -59,10 +58,11 @@ services:
 
   frontend:
     image: nextjs
-    #image: jokley/disti-nextjs
+    image: jokley/disti-nextjs
     container_name: next-frontend
-    build:
-      context: ./frontend
+    privileged: true
+    #build:
+      #context: ./frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
