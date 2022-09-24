@@ -57,7 +57,7 @@ services:
         ipv4_address: 172.16.238.13
 
   frontend:
-    image: nextjs
+    # image: nextjs
     image: jokley/disti-nextjs
     container_name: next-frontend
     privileged: true
