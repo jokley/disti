@@ -210,7 +210,7 @@ def handle_senors():
         VON = datetime.fromtimestamp(int(FROM + get_timestamp_now_offset())).isoformat()
         BIS = datetime.fromtimestamp(int(TO + get_timestamp_now_offset())).isoformat()  
 
-        all_senors = Sensor.query.filter(Sensor.date >= VON).filter(Sensor.date<=BIS).all()
+        all_senors = Sensor.query.filter(Sensor.date >= VON).filter(Sensor.date<=BIS).order_by(Sensor.date).all()
     return jsonify(sensors_schema.dump(all_senors))
 
 
