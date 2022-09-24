@@ -1,5 +1,5 @@
-FROM arm32v7/node:lts-alpine3.12 as BUILD_IMAGE
-#FROM node:lts-alpine as BUILD_IMAGE
+#FROM arm32v7/node:lts-alpine3.12 as BUILD_IMAGE
+FROM node:lts-alpine as BUILD_IMAGE
 
 WORKDIR /app
 
@@ -16,8 +16,8 @@ RUN npm run build
 # remove dev dependencies
 RUN npm prune --production
 
-FROM arm32v7/node:lts-alpine3.12
-#FROM node:lts-alpine
+#FROM arm32v7/node:lts-alpine3.12
+FROM node:lts-alpine
 
 WORKDIR /app
 

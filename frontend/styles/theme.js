@@ -11,8 +11,30 @@ let theme = createTheme({
         main: '#4a4a49',
       },
     },
-  })
+    
+    
+  });
 
-theme = responsiveFontSizes(theme);
+
+  theme = responsiveFontSizes(theme);
+
 
 export default theme;
+
+
+export const darkTheme = createTheme({
+  ...theme,
+  palette: {
+    ...theme.palette,
+    mode: 'dark'
+  },
+ 
+});
+
+export const lightTheme = createTheme({
+  ...theme,
+  palette: {
+    ...theme.palette,
+    mode: 'light'
+  }
+});

@@ -29,7 +29,7 @@ const ExmapleChart = ({ label, data,labels,options, style }) => {
             backgroundColor: gradient,
             borderColor: 'grey',
             borderWidth: 2
-          }
+          },
         ]
       },
       options: options,
@@ -57,7 +57,7 @@ const ExmapleChart = ({ label, data,labels,options, style }) => {
 
   if (style === 'mini') return ( 
 
-    <canvas  width='200'  height= '50' ref={chartRef} id="myChart"  />
+    <canvas  width='300'  height= '50' ref={chartRef} id="myChart"  />
  
   )
 };

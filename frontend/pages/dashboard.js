@@ -1,4 +1,4 @@
-import { Avatar, Card, CardContent, CardHeader, Grid, IconButton, LinearProgress, makeStyles, Menu, MenuItem} from "@mui/material";
+import { Avatar, Card, CardContent, CardHeader, Divider, Grid, IconButton, LinearProgress, ListItemSecondaryAction, makeStyles, Menu, MenuItem} from "@mui/material";
 import { useTheme } from '@mui/material/styles';
 import DeviceThermostatOutlinedIcon from '@mui/icons-material/DeviceThermostatOutlined';
 import DateRangeOutlinedIcon from '@mui/icons-material/DateRangeOutlined';
@@ -14,6 +14,11 @@ import { formatISO9075 } from "date-fns";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { CardActions, Collapse } from "@mui/material";
 import { styled } from '@mui/material/styles';
+import GaugeChart from "../components/charts/GaugeChart";
+import BarChart from "../components/charts/BarChart";
+import LineChart from "../components/charts/LineChart";
+import Controls from "@components/controls/Controls";
+import moment from 'moment'
 
 
 
@@ -36,6 +41,15 @@ import { styled } from '@mui/material/styles';
   
 }); */
 
+const color00 = 'rgba(0, 153, 153,1)';
+const color01 = 'rgba(0, 204, 204, 1)';
+const color02 = 'rgba(0, 255, 255, 1)';
+const color03 = 'rgba(153, 255, 255, 1)';
+const color04 = 'rgba(102, 204, 255, 1)';
+const color05= 'rgba(102, 153, 204, 1)';
+const color06 = 'rgba(0, 176, 191  , 1)';
+const color07 = 'rgba(204, 102, 153,1)';
+
 
 
 
@@ -47,87 +61,174 @@ export default function App() {
   //const classes = useStyles();
   const theme = useTheme();
   
-  const [to,setTo] = useState(TimestampNow);
-  const [from, setFrom] = useState(TimestampNow-3600);
+  const [to,setTo] =useState(moment().add(-5,'hour').unix());
+  const [from, setFrom] = useState(moment().unix());
+  const [timeStart,setTimeStart] = useState(moment().add(-5,'hour').unix());
+  const [timeEnd,setTimeEnd] = useState(moment().unix());
   const [range, setRange] = useState(1);
   const [anchorEl, setAnchorEl] = useState(null);
   const [expanded, setExpanded] = React.useState(false);
   const open = Boolean(anchorEl);
-  
+
+  const [sensorLabels, setSensorLabels] = useState([]);
+
+  const [boilerTopCurrent, setBoilerTopCurrent] = useState([]);
+  const [boilerTopMin, setBoilerTopMin] = useState([]);
+  const [boilerTopMax, setBoilerTopMax] = useState([]);
+  const [boilerTopData, setBoilerTopData] = useState([]);
+
+  const [coolerOutCurrent, setCoolerOutCurrent] = useState([]);
+  const [coolerOutMin, setCoolerOutMin] = useState([]);
+  const [coolerOutMax, setCoolerOutMax] = useState([]);
+  const [coolerOutData, setCoolerOutData] = useState([]);
  
   
-  const url = (`https://unrated-mallard-4700.dataplicity.io/api/sensors?from=${from}&to=${to}`);
+  const url = (`https://unrated-mallard-4700.dataplicity.io/api/sensors?from=${timeStart}&to=${timeEnd}`);
 
    
   const { data, error } = useSWR(url,{refreshInterval: 1000});
+
+  useEffect(() => { 
+ 
+    if (data){
+
+      // let SensorLabel = [...new Set(data.filter((item)=> item.name === 'Boiler Top').map(item => new Date(item.date).toLocaleString('DE-AT', {day: '2-digit', month: 'short',year: '2-digit', hour: '2-digit', minute: '2-digit'})))];
+      // let SensorLabel = [...new Set(data.filter((item)=> item.name === 'Boiler Top').map(item => item.date))];
+      
+      // console.log(SensorLabel)
+      //  SensorLabel = SensorLabel.map(item => new Date(item))
+      //   SensorLabel = SensorLabel.sort((a, b) => a - b );
+      // // SensorLabel = SensorLabel.map(item => new Date(item).toLocaleString('DE-AT', {day: '2-digit', month: 'short',year: '2-digit', hour: '2-digit', minute: '2-digit'}))
+      // console.log(SensorLabel)
+
+      
+
+      let SensorLabel = data.filter((item)=> item.name === 'Boiler Top').map((item)=> new Date(item.date).toLocaleString('DE-AT', { hour: '2-digit', minute: '2-digit'}));
+      SensorLabel = SensorLabel.sort((a, b) => a - b );
+
+      const SensorDataBoilerBottom = data.filter((item)=> item.name === 'Boiler Bottom').map((item)=> item.temp)
+      const SensorDataBoilerBottomMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
+      const SensorDataBoilerBottomMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
+      const SensorDataBoilerBottomCurrent=  Math.round(data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp).slice(-1)[0])
+    
+      const SensorDataBoilerTop = data.filter((item)=> item.name === 'Boiler Top').map((item)=> item.temp)
+      const SensorDataBoilerTopMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
+      const SensorDataBoilerTopMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
+      const SensorDataBoilerTopCurrent=  Math.round(data.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp).slice(-1)[0])
+      
+      const SensorDataCoolerIn = data.filter((item)=> item.name === 'Cooler In').map((item)=> item.temp)
+      const SensorDataCoolerInMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
+      const SensorDataCoolerInMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
+      const SensorDataCoolerInCurrent=  Math.round(data.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp).slice(-1)[0])
+      
+      const SensorDataCoolerOut = data.filter((item)=> item.name === 'Cooler Out').map((item)=> item.temp)
+      const SensorDataCoolerOutMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
+      const SensorDataCoolerOutMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
+      const SensorDataCoolerOutCurrent=  Math.round(data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp).slice(-1)[0])
+    
+      setSensorLabels(SensorLabel);
+
+      setBoilerTopData(SensorDataBoilerTop);
+      setBoilerTopCurrent(SensorDataBoilerTopCurrent);
+      setBoilerTopMin(SensorDataBoilerTopMin);
+      setBoilerTopMax(SensorDataBoilerTopMax);
+
+      setCoolerOutData(SensorDataCoolerOut);
+      setCoolerOutCurrent(SensorDataCoolerOutCurrent);
+      setCoolerOutMin(SensorDataCoolerOutMin);
+      setCoolerOutMax(SensorDataCoolerOutMax);
+
+      // setBoilerTopCurrent(44);
+      // console.log(SensorDataBoilerTopCurrent)
+      
+    
+    }
+
+  },[data]);
   
 
   if (error) return <h1>Something went wrong!</h1>
   if (!data) return ( 
-                <Box sx={{ width: '100%' }}>
-                 <LinearProgress
-               
-                 />
-              </Box>
-                  );
+    <Box sx={{ width: '100%' , paddingBottom:1,paddingTop:1}}>
+     <LinearProgress/>
+     <h1> ... Loading Data</h1>
+   </Box>
+      );
 
 
                 
-  const SensorLabel = data.filter((item)=> item.name === 'Boiler Top').map((item)=> formatISO9075(new Date (item.date),{ representation: 'time'}));
 
-  const SensorDataBoilerBottom = data.filter((item)=> item.name === 'Boiler Bottom').map((item)=> item.temp)
-  const SensorDataBoilerBottomMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
-  const SensorDataBoilerBottomMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
-  const SensorDataBoilerBottomCurrent=  Math.round(data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp).slice(-1)[0])
-
-  const SensorDataBoilerTop = data.filter((item)=> item.name === 'Boiler Top').map((item)=> item.temp)
-  const SensorDataBoilerTopMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
-  const SensorDataBoilerTopMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
-  const SensorDataBoilerTopCurrent=  Math.round(data.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp).slice(-1)[0])
-  
-  const SensorDataCoolerIn = data.filter((item)=> item.name === 'Cooler In').map((item)=> item.temp)
-  const SensorDataCoolerInMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
-  const SensorDataCoolerInMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
-  const SensorDataCoolerInCurrent=  Math.round(data.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp).slice(-1)[0])
-  
-  const SensorDataCoolerOut = data.filter((item)=> item.name === 'Cooler Out').map((item)=> item.temp)
-  const SensorDataCoolerOutMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
-  const SensorDataCoolerOutMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
-  const SensorDataCoolerOutCurrent=  Math.round(data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp).slice(-1)[0])
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
   const handleClose = (event) => {
-    let event_range = event.target.getAttribute("value")
-    setTo(TimestampNow)
-    setFrom(TimestampNow-(3600*event_range))
-    setRange(event_range)
+    // let event_range = event.target.getAttribute("value")
+    // setTo(TimestampNow)
+    // setFrom(TimestampNow-(3600*event_range))
+    // setRange(event_range)
+    // setAnchorEl(null);
+    setTimeStart(from)
+    setTimeEnd(to)
     setAnchorEl(null);
+  }
     
-  };
-
-  const handleprevious = () => {
-   
-      setTo(to+(3600*range))
-      setFrom(from+(3600*range))
+    const handleMenuClose = () =>{
+      setAnchorEl(null);
+    }
   
-      
-  };
 
-  const handlenext = () => {
-   
-    setTo(to-(3600*range))
-    setFrom(from-(3600*range))
+    const handleprevious = () => {
     
-   
-};
+      const zoom = timeEnd - timeStart;
+      setFrom(timeStart - zoom)
+      setTo(timeEnd - zoom)
+      setTimeStart(timeStart - zoom);
+      setTimeEnd(timeEnd - zoom);
+     
+    
+    };
+    
+    const handlenext = () => {
+    
+      const zoom = timeEnd - timeStart;
+      setFrom(timeStart + zoom)
+      setTo(timeEnd + zoom)
+      setTimeStart(timeStart +  zoom);
+      setTimeEnd(timeEnd + zoom );
+    
+    };
+
+const handlePreSelection = (event) => {
+  let _name = event.target.getAttribute("name")
+  let _range = Number(event.target.getAttribute("value"))
+  // _range -= 1
+    
+
+    setFrom(moment().add(-_range,'hour').unix());
+    setTo(moment().unix());
+}
+
+
+const handelDateRangePickerFrom = (newValue) => {
+  setFrom(moment(newValue).unix())
+
+  if (newValue >= to) {
+    setTo(moment(newValue).unix())
+  }    
+}
+
+const handelDateRangePickerTo = (newValue) => {
+  setTo(moment(newValue).unix())
+
+    if (newValue <= from) {
+      setFrom(moment(newValue).unix())
+    }     
+ }
 
 
 
-  const handleExpandClick = () => {
-    setExpanded(!expanded);
-  };
+
 
 
   
@@ -139,9 +240,12 @@ export default function App() {
       <Grid  container
         direction="row"
         justifyContent="space-around"
-        alignItems="center">
+        alignItems="center"
+        sx={{paddingBottom:1,paddingTop:1}}
+        >
             <Box sx={{ display: 'flex', alignItems: 'center', pl: 1, pb: 1 }}>
-          <IconButton aria-label="previous"  onClick={handlenext}>
+              <div>{new Date(moment.unix(from)).toLocaleString('DE-AT', {day: '2-digit', month: 'short',year: '2-digit', hour: '2-digit', minute: '2-digit'})}</div>
+          <IconButton aria-label="previous"  onClick={handleprevious}>
             {theme.direction === 'rtl' ? <SkipNextIcon /> : <SkipPreviousIcon />}
           </IconButton>
  
@@ -157,151 +261,128 @@ export default function App() {
                 id="basic-menu"
                 anchorEl={anchorEl}
                 open={open}
-                onClose={handleClose}
+                onClose={handleMenuClose}
                 MenuListProps={{
                   'aria-labelledby': 'basic-button',
                 }}
               >
-                <MenuItem value="1" onClick={handleClose}>Last 1 hour</MenuItem>
-                <MenuItem value="3" onClick={handleClose}>Last 3 hours</MenuItem>
-                <MenuItem value="6" onClick={handleClose}>Last 6 hours</MenuItem>
-                <MenuItem value="12" onClick={handleClose}>Last 12 hours</MenuItem>
-                <MenuItem value="24" onClick={handleClose}>Last 1 day</MenuItem>
-                <MenuItem value="48" onClick={handleClose}>Last 2 days</MenuItem>
+              <Controls.BasicDateRangePicker
+                from={from}
+                to={to}
+                onChangeFrom={handelDateRangePickerFrom}
+                onChangeTo={handelDateRangePickerTo}
+              
+              />
+                <MenuItem value="1" onClick={handlePreSelection}>Last 1 hour</MenuItem>
+                <MenuItem value="3" onClick={handlePreSelection}>Last 3 hours</MenuItem>
+                <MenuItem value="6" onClick={handlePreSelection}>Last 6 hours</MenuItem>
+                <MenuItem value="12" onClick={handlePreSelection}>Last 12 hours</MenuItem>
+                <MenuItem value="24" onClick={handlePreSelection}>Last 1 day</MenuItem>
+                <MenuItem value="48" onClick={handlePreSelection}>Last 2 days</MenuItem>
+                <Divider />
+                 <MenuItem>
+                 <Controls.Button 
+                  onClick={handleClose}
+                  text={'Übernehmen'}
+                  />
+                 </MenuItem>
               </Menu>  
 
-              <IconButton aria-label="next"  onClick={handleprevious}>
+              <IconButton aria-label="next"  onClick={handlenext}>
             {theme.direction === 'rtl' ? <SkipPreviousIcon /> : <SkipNextIcon />}
           </IconButton>
+          <div>{new Date(moment.unix(to)).toLocaleString('DE-AT', {day: '2-digit', month: 'short',year: '2-digit', hour: '2-digit', minute: '2-digit'})}</div>
         </Box>
     
       </Grid>
       <Grid  container
          direction="row"
-         justifyContent="space-around"
+         justifyContent="center"
          alignItems="center"
          style={{ gap: 15}}>
+      
+      {/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */}
       <Box
-      sx={{
-        bgcolor: 'background.paper',
-        boxShadow: 1,
-        borderRadius: 1,
-        p: 2,
-        width: 210 ,
-      }}
-     
-    >
-      <Grid  container
-        
-        justifyContent="space-between"
-        alignItems="center">
-      <Grid>
-      <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Bottom</Box>
-      </Grid>
-      <Grid>
-      <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
-      {`${SensorDataBoilerBottomCurrent}°C`}
+          sx={{
+            bgcolor: 'background.paper',
+            boxShadow: 1,
+            borderRadius: 1,
+            p: 2,
+            width: 500 ,
+            hight: 200,
+          }}
+          >
+        <Grid 
+          container
+          justifyContent="space-between"
+          alignItems="center"
+        >
+          <Grid>
+            <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Top</Box>
+          </Grid>
+          <Grid>
+            <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
+            {`${boilerTopCurrent}°C`}
+            </Box>
+          </Grid>
+        </Grid>
+        <GaugeChart data={[70,10,10,10]} 
+                    data1={[boilerTopCurrent, 100-boilerTopCurrent]} 
+                    needleValue={boilerTopCurrent}   
+                    labels={['','Vorlauf','Mittellauf','Nachlauf']} 
+                    color={[color04,color07,color06,color05]}
+                    color1={[color01,'white']}  
+                    rotation={0} />
+          <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
+          <p></p>
+          {`Min: ${boilerTopMin}°C '      'Max: ${boilerTopMax}°C`} 
+          </Box>
       </Box>
-      </Grid>
-      </Grid>
-      <ExampleChart style='mini'  label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options_simple} />
 
-      <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
-      {`Min: ${SensorDataBoilerBottomMin}°C  Max: ${SensorDataBoilerBottomMax}°C`} 
-      </Box>
-    </Box>
-     
+      {/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */}
       <Box
-      sx={{
-        bgcolor: 'background.paper',
-        boxShadow: 1,
-        borderRadius: 1,
-        p: 2,
-        width: 210 ,
-      }}
-     
-    >
-      <Grid  container
-        
-        justifyContent="space-between"
-        alignItems="center">
-      <Grid>
-      <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Top</Box>
-      </Grid>
-      <Grid>
-      <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
-      {`${SensorDataBoilerBottomCurrent}°C`}
+          sx={{
+            bgcolor: 'background.paper',
+            boxShadow: 1,
+            borderRadius: 1,
+            p: 2,
+            width: 500 ,
+            hight: 200,
+          }}
+          >
+        <Grid 
+          container
+          justifyContent="space-between"
+          alignItems="center"
+        >
+          <Grid>
+            <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Cooler Out</Box>
+          </Grid>
+          <Grid>
+            <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
+            {`${coolerOutCurrent}°C`}
+            </Box>
+          </Grid>
+        </Grid>
+        <BarChart 
+                  bereich1={[18]} 
+                  bereich2={[4]}
+                  bereich3={[8]}
+                  labels={['Temperasture','Value']} 
+                  needleValue={coolerOutCurrent}  
+                  />
+                  <p></p>
+          <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
+              {`Min: ${coolerOutMin}°C '      ' Max: ${coolerOutMax}°C`} 
+          </Box>
       </Box>
-      </Grid>
-      </Grid>
-      <ExampleChart style='mini'  label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options_simple} />
-
-      <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
-      {`Min: ${SensorDataBoilerTopMin}°C  Max: ${SensorDataBoilerTopMax}°C`} 
-      </Box>
-    </Box>
-     
-    <Box
-      sx={{
-        bgcolor: 'background.paper',
-        boxShadow: 1,
-        borderRadius: 1,
-        p: 2,
-        width: 210 ,
-      }}
-     
-    >
-      <Grid  container
-        
-        justifyContent="space-between"
-        alignItems="center">
-      <Grid>
-      <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Top</Box>
-      </Grid>
-      <Grid>
-      <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
-      {`${SensorDataBoilerBottomCurrent}°C`}
-      </Box>
-      </Grid>
-      </Grid>
-      <ExampleChart style='mini'  label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options_simple} />
-
-      <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
-      {`Min: ${SensorDataBoilerTopMin}°C  Max: ${SensorDataBoilerTopMax}°C`} 
-      </Box>
-    </Box>
-
-    <Box
-      sx={{
-        bgcolor: 'background.paper',
-        boxShadow: 1,
-        borderRadius: 1,
-        p: 2,
-        width: 210 ,
-      }}
-     
-    >
-      <Grid  container
-        
-        justifyContent="space-between"
-        alignItems="center">
-      <Grid>
-      <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Top</Box>
-      </Grid>
-      <Grid>
-      <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
-      {`${SensorDataBoilerBottomCurrent}°C`}
-      </Box>
-      </Grid>
-      </Grid>
-      <ExampleChart style='mini'  label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options_simple} />
-
-      <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
-      {`Min: ${SensorDataBoilerTopMin}°C  Max: ${SensorDataBoilerTopMax}°C`} 
-      </Box>
-    </Box>
 
     </Grid>
+
+    
+    
+   
+
   
       
      
@@ -316,58 +397,12 @@ export default function App() {
         alignItems="center"
         style={{ gap: 15 }}>
         
-        <Grid Grid item xs={10} sm={10} md={5}>
-        <Card>
-      <CardHeader 
-        avatar={
-          <Avatar  variant="rounded" style={{color:'#B9E4F5', background:' #72ADC4'}}>
-           <DeviceThermostatOutlinedIcon />
-        </Avatar>
-        }
-        
-        title={`Boiler Bottom: ${SensorDataBoilerBottomCurrent}°C`}
-        subheader={`Min: ${SensorDataBoilerBottomMin}°C  Max: ${SensorDataBoilerBottomMax}°C`} 
-      />
-      <CardContent>
-      <ExampleChart style='normal' label ='Boiler Bottom' data={SensorDataBoilerBottom} labels={SensorLabel} options={options} />
-      </CardContent>
-      </Card>
-      </Grid>
-      <Grid Grid item xs={10} sm={10} md={5}>
-      <Card>
-      <CardHeader 
-        avatar={
-          <Avatar  variant="rounded" style={{color:'#B9E4F5', background:' #72ADC4'}}>
-           <DeviceThermostatOutlinedIcon />
-        </Avatar>
-        }
-        
-        title={`Boiler Top: ${SensorDataBoilerTopCurrent}°C`}
-        subheader={`Min: ${SensorDataBoilerTopMin}°C  Max: ${SensorDataBoilerTopMax}°C`} 
-      />
-      <CardContent>
-      <ExampleChart style='normal' label ='Boiler Top' data={SensorDataBoilerTop} labels={SensorLabel} options={options} />
-      </CardContent>
-      </Card>
-      </Grid>
-      <Grid Grid item xs={10} sm={10} md={5}>
-      <Card>
-      <CardHeader 
-        avatar={
-          <Avatar  variant="rounded" style={{color:'#B9E4F5', background:' #72ADC4'}}>
-           <DeviceThermostatOutlinedIcon/>
-        </Avatar>
-        }
+  
+
+
       
-        title={`Cooler In: ${SensorDataCoolerInCurrent}°C`}
-        subheader={`Min: ${SensorDataCoolerInMin}°C  Max: ${SensorDataCoolerInMax}°C`} 
-      />
-      <CardContent>
-      <ExampleChart  style='normal' label ='Cooler In' data={SensorDataCoolerIn} labels={SensorLabel} options={options} />
-      </CardContent>
-      </Card>
-      </Grid>
-      <Grid Grid item xs={10} sm={10} md={5}>
+     
+      <Grid Grid item xs={12.6} sm={12.6} md={6.3}>
       <Card >
       <CardHeader 
         avatar={
@@ -375,15 +410,19 @@ export default function App() {
            <DeviceThermostatOutlinedIcon />
         </Avatar>
         }
-      
-        title={`Cooler Out: ${SensorDataCoolerOutCurrent}°C`} 
-        subheader={`Min: ${SensorDataCoolerOutMin}°C  Max: ${SensorDataCoolerOutMax}°C`} 
+        
+        title={`Boiler Top: ${boilerTopCurrent}°C`}
+        subheader={`Min: ${boilerTopMin}°C  Max: ${boilerTopMax}°C`} 
       />
       <CardContent>
-      <ExampleChart  style='normal' label ='Cooler Out' data={SensorDataCoolerOut} labels={SensorLabel} options={options} />
+      <LineChart  label ='Boiler Top' data={boilerTopData} labels={sensorLabels} />
       </CardContent>
       </Card>
       </Grid>
+
+
+
+    
       </Grid>
      
     </div>
