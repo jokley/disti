@@ -67,7 +67,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
           },
           {
             data: [],
-            barThickness: 18,
+            barThickness: 20,
            
           },
 
@@ -75,6 +75,8 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
       },
       // plugins: [ChartDataLabels],
       options: {
+        // barPercentage: 1,
+        // categoryPercentage: 1.1,
       indexAxis: 'y',
 
         plugins: {
@@ -213,14 +215,14 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
             color1 = [color04];
             data2=[0,0.25]
             color2 = [color05];
-            barThickness2 = 60;
+            barThickness2 = 70;
             data3=[0,bereich1-needleValue-0.125]
             color3 = [color04];
             data4=[0,bereich2]
             color4 = [color06];
             data5=[0,bereich3]
             color5 = [color07];
-            color6 = [color05]
+            color6 = [color04]
             break;
       case (needleValue  >=  zone1 && needleValue  <= zone2) :
             data1=[0,bereich1]
@@ -229,7 +231,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
             color2 = [color06];
             data3=[0,0.25]
             color3 = [color05];
-            barThickness3 = 60;
+            barThickness3 = 70;
             data4=[0,zone2-needleValue -0.125]
             color4 = [color06];
             data5=[0,bereich3]
@@ -245,7 +247,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
             color3 = [color07];
             data4=[0,0.25]
             color4 = [color05];
-            barThickness4 = 60;
+            barThickness4 = 70;
             data5=[0,zone3-needleValue+0.125]
             color5 = [color07];
             color6 = [color07]
@@ -296,7 +298,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
   // if (style === 'normal') 
   return ( 
     
-  <canvas  width='300'  height='120' ref={chartRef} id="myChart"  />
+  <canvas  width='450'  height='120' ref={chartRef} id="myChart"  />
     )
  };
 

@@ -16,8 +16,8 @@ const LineChart = ({ data,labels,label,color}) => {
     
     const gradient01 = ctx.createLinearGradient(0, 0, 0, 400);
     gradient01.addColorStop(0.75, 'rgba(47, 213, 180 ,0.15)');
-    gradient01.addColorStop(0.5, 'rgba(47, 213, 180 ,0.3)');
-    gradient01.addColorStop(0.25, 'rgba(47, 213, 180 ,0.45)');
+    gradient01.addColorStop(0.5, 'rgba(47, 213, 180 ,0.35)');
+    gradient01.addColorStop(0.25, 'rgba(47, 213, 180 ,0.75)');
 
     const cursor = {
       id: 'cursor',
@@ -126,7 +126,7 @@ const LineChart = ({ data,labels,label,color}) => {
 
   return ( 
     
-  <canvas  width='800'  height='300' ref={chartRef} id="myChart"  />
+  <canvas  width='900'  height='200' ref={chartRef} id="myChart"  />
     )
  };
 

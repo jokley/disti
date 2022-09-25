@@ -24,6 +24,7 @@ const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => 
     if (!chartRef) return;
     Chart.register(...registerables)
     const ctx = chartRef.current.getContext("2d");
+    
 
     const needle = {
       id: 'needle',
@@ -143,6 +144,7 @@ const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => 
          
           legend: {
             display: false,
+           
           },
           title: {
             display: false,
@@ -230,7 +232,7 @@ const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => 
   // if (style === 'normal') 
   return ( 
     
-  <canvas  width='300'  height='120' ref={chartRef} id="myChart"  />
+  <canvas  width='450'  height='120' ref={chartRef} id="myChart"  />
     )
  };
 

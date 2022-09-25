@@ -101,7 +101,7 @@ export default function Home() {
 
   return (
     <>
-    <Paper>
+    <Paper  sx={{paddingBottom:1,paddingTop:3}}>
     <form onSubmit={addCar}>
       <label htmlFor="name">Name</label>
       <input id="name" name="name" type="text" autoComplete="name" required />

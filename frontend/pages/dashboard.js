@@ -1,4 +1,4 @@
-import { Avatar, Card, CardContent, CardHeader, Divider, Grid, IconButton, LinearProgress, ListItemSecondaryAction, makeStyles, Menu, MenuItem} from "@mui/material";
+import { Avatar, Card, CardContent, CardHeader, Divider, Grid, IconButton, LinearProgress, ListItemSecondaryAction, makeStyles, Menu, MenuItem, Stack} from "@mui/material";
 import { useTheme } from '@mui/material/styles';
 import DeviceThermostatOutlinedIcon from '@mui/icons-material/DeviceThermostatOutlined';
 import DateRangeOutlinedIcon from '@mui/icons-material/DateRangeOutlined';
@@ -61,10 +61,11 @@ export default function App() {
   //const classes = useStyles();
   const theme = useTheme();
   
-  const [to,setTo] =useState(moment().add(-5,'hour').unix());
-  const [from, setFrom] = useState(moment().unix());
+  
+  const [from, setFrom] = useState(moment().add(-5,'hour').unix());
+  const [to,setTo] =useState(moment().add(5,'hour').unix());
   const [timeStart,setTimeStart] = useState(moment().add(-5,'hour').unix());
-  const [timeEnd,setTimeEnd] = useState(moment().unix());
+  const [timeEnd,setTimeEnd] = useState(moment().add(5,'hour').unix());
   const [range, setRange] = useState(1);
   const [anchorEl, setAnchorEl] = useState(null);
   const [expanded, setExpanded] = React.useState(false);
@@ -92,39 +93,36 @@ export default function App() {
  
     if (data){
 
-      // let SensorLabel = [...new Set(data.filter((item)=> item.name === 'Boiler Top').map(item => new Date(item.date).toLocaleString('DE-AT', {day: '2-digit', month: 'short',year: '2-digit', hour: '2-digit', minute: '2-digit'})))];
-      // let SensorLabel = [...new Set(data.filter((item)=> item.name === 'Boiler Top').map(item => item.date))];
-      
-      // console.log(SensorLabel)
-      //  SensorLabel = SensorLabel.map(item => new Date(item))
-      //   SensorLabel = SensorLabel.sort((a, b) => a - b );
-      // // SensorLabel = SensorLabel.map(item => new Date(item).toLocaleString('DE-AT', {day: '2-digit', month: 'short',year: '2-digit', hour: '2-digit', minute: '2-digit'}))
-      // console.log(SensorLabel)
 
+      let dataFilter = [];
+      
+      dataFilter = data.filter(item => 
+        (moment(item.date).unix() >= from && moment(item.date).unix() <= to))
       
 
-      let SensorLabel = data.filter((item)=> item.name === 'Boiler Top').map((item)=> new Date(item.date).toLocaleString('DE-AT', { hour: '2-digit', minute: '2-digit'}));
+
+      let SensorLabel = dataFilter.filter((item)=> item.name === 'Boiler Top').map((item)=> new Date(item.date).toLocaleString('DE-AT', { hour: '2-digit', minute: '2-digit'}));
       SensorLabel = SensorLabel.sort((a, b) => a - b );
 
-      const SensorDataBoilerBottom = data.filter((item)=> item.name === 'Boiler Bottom').map((item)=> item.temp)
-      const SensorDataBoilerBottomMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
-      const SensorDataBoilerBottomMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
-      const SensorDataBoilerBottomCurrent=  Math.round(data.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp).slice(-1)[0])
+      const SensorDataBoilerBottom = dataFilter.filter((item)=> item.name === 'Boiler Bottom').map((item)=> item.temp)
+      const SensorDataBoilerBottomMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
+      const SensorDataBoilerBottomMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
+      const SensorDataBoilerBottomCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp).slice(-1)[0])
     
-      const SensorDataBoilerTop = data.filter((item)=> item.name === 'Boiler Top').map((item)=> item.temp)
-      const SensorDataBoilerTopMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
-      const SensorDataBoilerTopMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
-      const SensorDataBoilerTopCurrent=  Math.round(data.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp).slice(-1)[0])
+      const SensorDataBoilerTop = dataFilter.filter((item)=> item.name === 'Boiler Top').map((item)=> item.temp)
+      const SensorDataBoilerTopMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
+      const SensorDataBoilerTopMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
+      const SensorDataBoilerTopCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp).slice(-1)[0])
       
-      const SensorDataCoolerIn = data.filter((item)=> item.name === 'Cooler In').map((item)=> item.temp)
-      const SensorDataCoolerInMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
-      const SensorDataCoolerInMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
-      const SensorDataCoolerInCurrent=  Math.round(data.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp).slice(-1)[0])
+      const SensorDataCoolerIn = dataFilter.filter((item)=> item.name === 'Cooler In').map((item)=> item.temp)
+      const SensorDataCoolerInMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
+      const SensorDataCoolerInMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
+      const SensorDataCoolerInCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp).slice(-1)[0])
       
-      const SensorDataCoolerOut = data.filter((item)=> item.name === 'Cooler Out').map((item)=> item.temp)
-      const SensorDataCoolerOutMax = Math.round(Math.max.apply(null, data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
-      const SensorDataCoolerOutMin =  Math.round(Math.min.apply(null, data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
-      const SensorDataCoolerOutCurrent=  Math.round(data.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp).slice(-1)[0])
+      const SensorDataCoolerOut = dataFilter.filter((item)=> item.name === 'Cooler Out').map((item)=> item.temp)
+      const SensorDataCoolerOutMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
+      const SensorDataCoolerOutMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
+      const SensorDataCoolerOutCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp).slice(-1)[0])
     
       setSensorLabels(SensorLabel);
 
@@ -144,7 +142,7 @@ export default function App() {
     
     }
 
-  },[data]);
+  },[data,from,to]);
   
 
   if (error) return <h1>Something went wrong!</h1>
@@ -163,11 +161,7 @@ export default function App() {
     setAnchorEl(event.currentTarget);
   };
   const handleClose = (event) => {
-    // let event_range = event.target.getAttribute("value")
-    // setTo(TimestampNow)
-    // setFrom(TimestampNow-(3600*event_range))
-    // setRange(event_range)
-    // setAnchorEl(null);
+  
     setTimeStart(from)
     setTimeEnd(to)
     setAnchorEl(null);
@@ -180,22 +174,26 @@ export default function App() {
 
     const handleprevious = () => {
     
-      const zoom = timeEnd - timeStart;
-      setFrom(timeStart - zoom)
-      setTo(timeEnd - zoom)
-      setTimeStart(timeStart - zoom);
-      setTimeEnd(timeEnd - zoom);
+      const zoom = to - from;
+      setFrom(from - zoom)
+      setTo(to - zoom)
+      if (from - zoom < timeStart){
+        setTimeStart(from -  zoom);
+        setTimeEnd(to - zoom );
+        }
      
     
     };
     
     const handlenext = () => {
     
-      const zoom = timeEnd - timeStart;
-      setFrom(timeStart + zoom)
-      setTo(timeEnd + zoom)
-      setTimeStart(timeStart +  zoom);
-      setTimeEnd(timeEnd + zoom );
+      const zoom = to - from;
+      setFrom(from + zoom)
+      setTo(to + zoom)
+      if (to + zoom > timeEnd){
+      setTimeStart(from +  zoom);
+      setTimeEnd(to + zoom );
+      }
     
     };
 
@@ -241,7 +239,7 @@ const handelDateRangePickerTo = (newValue) => {
         direction="row"
         justifyContent="space-around"
         alignItems="center"
-        sx={{paddingBottom:1,paddingTop:1}}
+        sx={{paddingBottom:1,paddingTop:3}}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', pl: 1, pb: 1 }}>
               <div>{new Date(moment.unix(from)).toLocaleString('DE-AT', {day: '2-digit', month: 'short',year: '2-digit', hour: '2-digit', minute: '2-digit'})}</div>
@@ -302,14 +300,15 @@ const handelDateRangePickerTo = (newValue) => {
          style={{ gap: 15}}>
       
       {/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */}
+      <Grid item xs={8} sm={8} md={4}>
       <Box
           sx={{
             bgcolor: 'background.paper',
             boxShadow: 1,
             borderRadius: 1,
             p: 2,
-            width: 500 ,
-            hight: 200,
+            // width: 500 ,
+            // hight: 200,
           }}
           >
         <Grid 
@@ -326,6 +325,9 @@ const handelDateRangePickerTo = (newValue) => {
             </Box>
           </Grid>
         </Grid>
+        <Stack direction={'row'}
+               alignItems={'center'}
+               justifyContent="space-between">
         <GaugeChart data={[70,10,10,10]} 
                     data1={[boilerTopCurrent, 100-boilerTopCurrent]} 
                     needleValue={boilerTopCurrent}   
@@ -333,21 +335,30 @@ const handelDateRangePickerTo = (newValue) => {
                     color={[color04,color07,color06,color05]}
                     color1={[color01,'white']}  
                     rotation={0} />
+          <Box>
+           <div>Heizen</div>
+            <div>Vorlauf</div>
+            <div>Mittellauf</div>
+            <div>Nachlauf</div>
+            </Box>
+            </Stack>
           <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
           <p></p>
           {`Min: ${boilerTopMin}°C '      'Max: ${boilerTopMax}°C`} 
           </Box>
       </Box>
+      </Grid>
 
       {/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */}
+      <Grid item xs={8} sm={8} md={4}>
       <Box
           sx={{
             bgcolor: 'background.paper',
             boxShadow: 1,
             borderRadius: 1,
             p: 2,
-            width: 500 ,
-            hight: 200,
+            // width: 500 ,
+            // hight: 200,
           }}
           >
         <Grid 
@@ -364,18 +375,30 @@ const handelDateRangePickerTo = (newValue) => {
             </Box>
           </Grid>
         </Grid>
+        <Stack direction={'row'}
+               alignItems={'center'}
+               justifyContent="space-between">
         <BarChart 
                   bereich1={[18]} 
                   bereich2={[4]}
                   bereich3={[8]}
-                  labels={['Temperasture','Value']} 
+                  labels={['Value','Temperature']} 
                   needleValue={coolerOutCurrent}  
                   />
+                     <Box>
+            <div>Cold</div>
+            <div>Perfect</div>
+            <div>Hot</div>
+          </Box>
+          </Stack>
                   <p></p>
           <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
-              {`Min: ${coolerOutMin}°C '      ' Max: ${coolerOutMax}°C`} 
+              {`Min: ${coolerOutMin}°C        Max: ${coolerOutMax}°C`} 
           </Box>
+       
       </Box>
+      
+      </Grid>
 
     </Grid>
 
@@ -402,7 +425,7 @@ const handelDateRangePickerTo = (newValue) => {
 
       
      
-      <Grid Grid item xs={12.6} sm={12.6} md={6.3}>
+      <Grid Grid item xs={8} sm={8} md={8.1}>
       <Card >
       <CardHeader 
         avatar={
