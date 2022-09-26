@@ -75,6 +75,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
       },
       // plugins: [ChartDataLabels],
       options: {
+        // maintainAspectRatio: true,
         // barPercentage: 1,
         // categoryPercentage: 1.1,
       indexAxis: 'y',
@@ -122,6 +123,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
              display: true,
              
              min: 10,
+             max: 30,
               ticks: { 
                   display: true,
                   stepSize: 2,
@@ -159,7 +161,8 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
         //   }
         // },
         // rotation: (-0.5 * Math.PI) - (-rotation/160 * Math.PI),
-         responsive: false,
+        //  
+       responsive: false,
         // aspectRatio: 1,
         
         // cutout: '0%',
@@ -297,8 +300,16 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
 
   // if (style === 'normal') 
   return ( 
+
+  //   <div position='relative'
+  //   margin='auto'
+  //   height='80vh'
+  //   width= '80vw'
+  // >
+    // <canvas ref={chartRef} id="myChart" ></canvas>
+// </div>
     
-  <canvas  width='450'  height='120' ref={chartRef} id="myChart"  />
+  <canvas  width='250'  height='120' ref={chartRef} id="myChart"  />
     )
  };
 

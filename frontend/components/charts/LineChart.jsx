@@ -71,6 +71,9 @@ const LineChart = ({ data,labels,label,color}) => {
       datalabels: {
         display: false,
       },
+      legend: {
+            display: false,
+      },
       tooltip: {
               mode: 'index',
               intersect: false,
@@ -126,7 +129,7 @@ const LineChart = ({ data,labels,label,color}) => {
 
   return ( 
     
-  <canvas  width='900'  height='200' ref={chartRef} id="myChart"  />
+  <canvas  width='900'  height='250' ref={chartRef} id="myChart"  />
     )
  };
 

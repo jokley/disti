@@ -300,15 +300,15 @@ const handelDateRangePickerTo = (newValue) => {
          style={{ gap: 15}}>
       
       {/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */}
-      <Grid item xs={8} sm={8} md={4}>
+      <Grid item xs={9} sm={9} md={4.5}>
       <Box
           sx={{
             bgcolor: 'background.paper',
             boxShadow: 1,
             borderRadius: 1,
             p: 2,
-            // width: 500 ,
-            // hight: 200,
+            //  width: 350 ,
+             hight: 200,
           }}
           >
         <Grid 
@@ -325,9 +325,6 @@ const handelDateRangePickerTo = (newValue) => {
             </Box>
           </Grid>
         </Grid>
-        <Stack direction={'row'}
-               alignItems={'center'}
-               justifyContent="space-between">
         <GaugeChart data={[70,10,10,10]} 
                     data1={[boilerTopCurrent, 100-boilerTopCurrent]} 
                     needleValue={boilerTopCurrent}   
@@ -335,13 +332,6 @@ const handelDateRangePickerTo = (newValue) => {
                     color={[color04,color07,color06,color05]}
                     color1={[color01,'white']}  
                     rotation={0} />
-          <Box>
-           <div>Heizen</div>
-            <div>Vorlauf</div>
-            <div>Mittellauf</div>
-            <div>Nachlauf</div>
-            </Box>
-            </Stack>
           <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
           <p></p>
           {`Min: ${boilerTopMin}°C '      'Max: ${boilerTopMax}°C`} 
@@ -350,15 +340,15 @@ const handelDateRangePickerTo = (newValue) => {
       </Grid>
 
       {/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */}
-      <Grid item xs={8} sm={8} md={4}>
+      <Grid item xs={9} sm={9} md={4.5}>
       <Box
           sx={{
             bgcolor: 'background.paper',
             boxShadow: 1,
             borderRadius: 1,
             p: 2,
-            // width: 500 ,
-            // hight: 200,
+            //  width: 300 ,
+             hight: 200,
           }}
           >
         <Grid 
@@ -375,9 +365,6 @@ const handelDateRangePickerTo = (newValue) => {
             </Box>
           </Grid>
         </Grid>
-        <Stack direction={'row'}
-               alignItems={'center'}
-               justifyContent="space-between">
         <BarChart 
                   bereich1={[18]} 
                   bereich2={[4]}
@@ -385,12 +372,6 @@ const handelDateRangePickerTo = (newValue) => {
                   labels={['Value','Temperature']} 
                   needleValue={coolerOutCurrent}  
                   />
-                     <Box>
-            <div>Cold</div>
-            <div>Perfect</div>
-            <div>Hot</div>
-          </Box>
-          </Stack>
                   <p></p>
           <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
               {`Min: ${coolerOutMin}°C        Max: ${coolerOutMax}°C`} 
@@ -425,7 +406,7 @@ const handelDateRangePickerTo = (newValue) => {
 
       
      
-      <Grid Grid item xs={8} sm={8} md={8.1}>
+      <Grid Grid item xs={9} sm={9} md={9.1}>
       <Card >
       <CardHeader 
         avatar={

@@ -126,6 +126,7 @@ const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => 
         ]
       },
       options: {
+        // maintainAspectRatio: true,
         plugins: {
           // tooltip: {
           //   callbacks: {
@@ -232,7 +233,15 @@ const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => 
   // if (style === 'normal') 
   return ( 
     
-  <canvas  width='450'  height='120' ref={chartRef} id="myChart"  />
+//     <div position='relative'
+//     margin='auto'
+//     height='89vh'
+//     width= '80vw'
+//   >
+//     <canvas ref={chartRef} id="myChart" ></canvas>
+// </div>
+    
+  <canvas  width='250'  height='120' ref={chartRef} id="myChart"  />
     )
  };
 
