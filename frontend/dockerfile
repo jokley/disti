@@ -1,9 +1,10 @@
 #FROM arm32v7/node:lts-alpine3.12 as BUILD_IMAGE
 FROM node:lts-alpine as BUILD_IMAGE
+ENV NODE_OPTIONS="--openssl-legacy-provider"
 
 WORKDIR /app
 
-COPY /package.json package-lock.json ./
+COPY package.json package-lock.json ./
 
 # install dependencies
 RUN npm install
