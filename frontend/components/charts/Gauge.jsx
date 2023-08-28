@@ -1,10 +1,11 @@
 import React, { useRef, useEffect, useState } from "react";
 import {Chart,registerables } from "chart.js";
 import ChartDataLabels from 'chartjs-plugin-datalabels';
+import * as Gauge from "chartjs-gauge";
 
 
 
-const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => {
+const GaugePlugin = ({ data,data1,needleValue,labels,color,color1, maxValue}) => {
   
   const chartRef = useRef(null);
   const [myChart, setMyChart] = useState(null);
@@ -27,89 +28,92 @@ const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => 
     const ctx = chartRef.current.getContext("2d");
     
 
-    const needle = {
-      id: 'needle',
-    afterDraw (chart)  {
-      var needleValue = chart.config.data.datasets[0].needleValue;
-      var dataTotal = chart.config.data.datasets[0].data.reduce((a, b) => a + b, 0);
-      var angle = Math.PI + (1 / dataTotal * needleValue * Math.PI);
-      var ctx = chart.ctx;
-      var cw = chart.canvas.offsetWidth;
-      var ch = chart.canvas.offsetHeight;
-      var cx = cw / 2;
-      var cy = ch - 6;
-
-      ctx.translate(cx, cy);
-      ctx.rotate(angle);
-      ctx.beginPath();
-      ctx.moveTo(0, -3);
-      ctx.lineTo(ch - 20, 0);
-      ctx.lineTo(0, 3);
-      ctx.fillStyle = 'rgb(100, 100, 100)';
-      ctx.fill();
-      ctx.rotate(-angle);
-      ctx.translate(-cx, -cy);
-      ctx.beginPath();
-      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
     
-    const counter = {
-      id: 'counter',
-      beforeDraw (chart, args, options) {
-  
-         if (chart.config.options.elements.center) {
-        //   //Get ctx from string
-          // var ctx = chart.chart.ctx;
-          // var ctx = chart.ctx;
+    
 
-        //  const {ctx} = chart;
-        //  ctx.save();
+//     const needle = {
+//       id: 'needle',
+//     afterDraw (chart)  {
+//       var needleValue = chart.config.data.datasets[0].needleValue;
+//       var dataTotal = chart.config.data.datasets[0].data.reduce((a, b) => a + b, 0);
+//       var angle = Math.PI + (1 / dataTotal * needleValue * Math.PI);
+//       var ctx = chart.ctx;
+//       var cw = chart.canvas.offsetWidth;
+//       var ch = chart.canvas.offsetHeight;
+//       var cx = cw / 2;
+//       var cy = ch - 6;
+
+//       ctx.translate(cx, cy);
+//       ctx.rotate(angle);
+//       ctx.beginPath();
+//       ctx.moveTo(0, -3);
+//       ctx.lineTo(ch - 20, 0);
+//       ctx.lineTo(0, 3);
+//       ctx.fillStyle = 'rgb(100, 100, 100)';
+//       ctx.fill();
+//       ctx.rotate(-angle);
+//       ctx.translate(-cx, -cy);
+//       ctx.beginPath();
+//       ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+//       ctx.fill();
+//     }
+//   }
+    
+//     const counter = {
+//       id: 'counter',
+//       beforeDraw (chart, args, options) {
   
-          //Get options from the center object in options
-          var centerConfig = chart.config.options.elements.center;
-          var fontStyle = centerConfig.fontStyle || 'Arial';
-          var txt = centerConfig.text;
-          var color = centerConfig.color || '#000';
-          var maxFontSize = centerConfig.maxFontSize || 25;
-          var sidePadding = centerConfig.sidePadding || 20;
-          var sidePaddingCalculated = (sidePadding / 100) * (chart.innerRadius * 2)
-          //Start with a base font of 30px
-          ctx.font = "20px " + fontStyle;
+//          if (chart.config.options.elements.center) {
+//         //   //Get ctx from string
+//           // var ctx = chart.chart.ctx;
+//           // var ctx = chart.ctx;
+
+//         //  const {ctx} = chart;
+//         //  ctx.save();
   
-          //Get the width of the string and also the width of the element minus 10 to give it 5px side padding
-          var stringWidth = ctx.measureText(txt).width;
-          var elementWidth = (chart.innerRadius * 2) - sidePaddingCalculated;
+//           //Get options from the center object in options
+//           var centerConfig = chart.config.options.elements.center;
+//           var fontStyle = centerConfig.fontStyle || 'Arial';
+//           var txt = centerConfig.text;
+//           var color = centerConfig.color || '#000';
+//           var maxFontSize = centerConfig.maxFontSize || 25;
+//           var sidePadding = centerConfig.sidePadding || 20;
+//           var sidePaddingCalculated = (sidePadding / 100) * (chart.innerRadius * 2)
+//           //Start with a base font of 30px
+//           ctx.font = "20px " + fontStyle;
   
-          // Find out how much the font can grow in width.
-          var widthRatio = elementWidth / stringWidth;
-          var newFontSize = Math.floor(30 * widthRatio);
-          var elementHeight = (chart.innerRadius * 2);
+//           //Get the width of the string and also the width of the element minus 10 to give it 5px side padding
+//           var stringWidth = ctx.measureText(txt).width;
+//           var elementWidth = (chart.innerRadius * 2) - sidePaddingCalculated;
   
-          // Pick a new font size so it will not be larger than the height of label.
-          var fontSizeToUse = Math.min(newFontSize, elementHeight, maxFontSize);
+//           // Find out how much the font can grow in width.
+//           var widthRatio = elementWidth / stringWidth;
+//           var newFontSize = Math.floor(30 * widthRatio);
+//           var elementHeight = (chart.innerRadius * 2);
   
-          //Set font settings to draw it correctly.
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          var centerX = ((chart.chartArea.left + chart.chartArea.right) / 2);
-          var centerY = ((chart.chartArea.top + chart.chartArea.bottom)/ 1.5);
-          ctx.font = fontSizeToUse + "px " + fontStyle;
-          ctx.fillStyle = color;
+//           // Pick a new font size so it will not be larger than the height of label.
+//           var fontSizeToUse = Math.min(newFontSize, elementHeight, maxFontSize);
   
-          //Draw text in center
-          ctx.fillText(txt, centerX, centerY);
-         }
-      }
-    };
+//           //Set font settings to draw it correctly.
+//           ctx.textAlign = 'center';
+//           ctx.textBaseline = 'middle';
+//           var centerX = ((chart.chartArea.left + chart.chartArea.right) / 2);
+//           var centerY = ((chart.chartArea.top + chart.chartArea.bottom)/ 1.5);
+//           ctx.font = fontSizeToUse + "px " + fontStyle;
+//           ctx.fillStyle = color;
+  
+//           //Draw text in center
+//           ctx.fillText(txt, centerX, centerY);
+//          }
+//       }
+//     };
 
     
 
 
 
     const myChart = new Chart(ctx, {
-      type: 'doughnut',
+      type: 'gauge',
       data: {
         labels: labels,
         datasets: [
@@ -154,6 +158,20 @@ const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => 
                       
               },
             },
+            needle: {
+                radiusPercentage: 2,
+                widthPercentage: 2,
+                lengthPercentage: 30,
+                color: "rgb(0, 0, 0)"
+              },
+              valueLabel: {
+                fontSize: 24,
+                formatter: function (value, context) {
+                  // debugger;
+                  return SQL + " %";
+                  // return '< ' + Math.round(value);
+                }
+              },
             
           
        
@@ -196,7 +214,7 @@ const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => 
         //   }
         // }
       },
-         plugins: [ChartDataLabels,counter,needle],
+         plugins: [ChartDataLabels],
     });
     setMyChart(myChart);
   
@@ -261,4 +279,4 @@ const GaugeChart = ({ data,data1,needleValue,labels,color,color1, maxValue}) => 
     )
  };
 
-export default GaugeChart;
+export default GaugePlugin;

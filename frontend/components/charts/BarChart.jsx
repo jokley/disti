@@ -3,7 +3,7 @@ import {Chart,registerables } from "chart.js";
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 
 
-const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation}) => {
+const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue}) => {
   
   const chartRef = useRef(null);
   const [myChart, setMyChart] = useState(null);
@@ -46,34 +46,46 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
         datasets: [
           {
             data: [],
-            
-          },
-          {
-            data: [],
-            
-          },
           
-          {
-            data: [],
-          
-          },
-          {
-            data: [],
             
           },
           {
             data: [],
            
+           
+            
+          },
+          
+          {
+            data: [],
+            
+           
+          
           },
           {
             data: [],
+           
+           
+            
+          },
+          {
+            data: [],
+          
+            borderRadius: 5,
+           
+           
+          },
+          {
+            data: [],
+           
             barThickness: 20,
+           
            
           },
 
         ]
       },
-      // plugins: [ChartDataLabels],
+      plugins: [ChartDataLabels],
       options: {
         // maintainAspectRatio: true,
         // barPercentage: 1,
@@ -81,28 +93,34 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
       indexAxis: 'y',
 
         plugins: {
-          // datalabels: {
-          //   formatter: (value, ctx) => {
-     
-          //     let datasets = ctx.chart.data.datasets;
-     
-          //     if (datasets.indexOf(ctx.dataset) === datasets.length - 1) {
-          //       let sum = datasets[0].data.reduce((a, b) => a + b, 0);
-          //       let percentage = Math.round((value / sum) * 100) + '%';
-          //       return percentage;
-          //     } else {
-          //       return percentage;
-          //     }
-          //   },
-          //   backgroundColor: '#E7FAFC' ,
-          //   align: 'end',
-          //   anchor: 'end',
-          //   color: 'black',
-          //   offset: 8,
-          //   font: {
-          //     weight: "bold",
-          //     size: 11            },
-          // },
+          datalabels: {
+            // clamp: true,
+            textAlign: 'center',
+            borderRadius: '5',
+            font: {
+              size: 20,
+            },
+            align: 'center',
+            anchor: 'end',
+            color: 'black',
+            backgroundColor: function(ctx) {
+              return ctx.chart.data.datasets[5].label; // display labels with an odd index
+            },
+            display: function(ctx) {
+              return ctx.chart.data.labels[ctx.dataIndex] === 'Value'; // display labels with an odd index
+            },
+            formatter: (val, ctx) => {
+              const formattedVal = Intl.NumberFormat('de-DE', {
+                minimumFractionDigits: 1,
+              }).format(val);
+              
+              return `${formattedVal}°C`     
+                    
+            },
+           
+           
+          },
+          
           legend: {
             display: false,
             // labels: {
@@ -177,7 +195,6 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
         //   }
         // }
       },
-      //  plugins: [counter]
     });
     setMyChart(myChart);
   
@@ -190,7 +207,6 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
   useEffect(() => {
     if (!myChart) return;
 
-    // console.log(data)
     let zone1 = parseInt(bereich1);
     let zone2 = parseInt(bereich2) + zone1;
     let zone3 =  parseInt(bereich3) + zone2;
@@ -199,6 +215,14 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
     let data3 = [];
     let data4 = [];
     let data5 = [];
+    // let label1 = null;
+    // let label2 = null;
+    // let label3 = null;
+    // let label4 = null;
+    // let label5 = null;
+
+    let labels =[];
+
     let color1 = 'white';
     let color2 = 'white';
     let color3 = 'white';
@@ -218,7 +242,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
             color1 = [color04];
             data2=[0,0.25]
             color2 = [color05];
-            barThickness2 = 70;
+            barThickness2 = 50;
             data3=[0,bereich1-needleValue-0.125]
             color3 = [color04];
             data4=[0,bereich2]
@@ -234,7 +258,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
             color2 = [color06];
             data3=[0,0.25]
             color3 = [color05];
-            barThickness3 = 70;
+            barThickness3 = 50;
             data4=[0,zone2-needleValue -0.125]
             color4 = [color06];
             data5=[0,bereich3]
@@ -250,7 +274,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
             color3 = [color07];
             data4=[0,0.25]
             color4 = [color05];
-            barThickness4 = 70;
+            barThickness4 = 50;
             data5=[0,zone3-needleValue+0.125]
             color5 = [color07];
             color6 = [color07]
@@ -265,6 +289,14 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
     myChart.data.datasets[4].data = data5;
     myChart.data.datasets[5].data = [needleValue,0];
 
+    
+    // myChart.data.datasets[0].label = label1;
+    // myChart.data.datasets[1].label = label2;
+    // myChart.data.datasets[2].label = label3;
+    // myChart.data.datasets[3].label = label4;
+     myChart.data.datasets[5].label = color6;
+  
+
 
 
     myChart.data.datasets[0].backgroundColor = color1;
@@ -272,7 +304,7 @@ const SinglePiChart = ({ bereich1,bereich2,bereich3,labels,needleValue, rotation
     myChart.data.datasets[2].backgroundColor = color3;
     myChart.data.datasets[3].backgroundColor = color4;
     myChart.data.datasets[4].backgroundColor = color5;
-    myChart.data.datasets[5].backgroundColor = color6;
+    myChart.data.datasets[5].backgroundColor = 'white';
 
 
     myChart.data.datasets[0].barThickness = barThickness1;

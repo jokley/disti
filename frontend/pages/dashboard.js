@@ -15,10 +15,12 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { CardActions, Collapse } from "@mui/material";
 import { styled } from '@mui/material/styles';
 import GaugeChart from "../components/charts/GaugeChart";
+// import GaugePlugin from "../components/charts/Gauge";
 import BarChart from "../components/charts/BarChart";
 import LineChart from "../components/charts/LineChart";
 import Controls from "@components/controls/Controls";
-import moment from 'moment'
+import moment from 'moment';
+// import { useWindowDimensions } from "../hooks/useWindowDimensions";
 
 
 
@@ -82,9 +84,11 @@ export default function App() {
   const [coolerOutMin, setCoolerOutMin] = useState([]);
   const [coolerOutMax, setCoolerOutMax] = useState([]);
   const [coolerOutData, setCoolerOutData] = useState([]);
+
+  // const { width, height } = useWindowDimensions();
  
   
-  const url = (`https://unrated-mallard-4700.dataplicity.io/api/sensors?from=${timeStart}&to=${timeEnd}`);
+  const url = (`https://venti.pi.jokley.at//api/sensors?from=${timeStart}&to=${timeEnd}`);
 
    
   const { data, error } = useSWR(url,{refreshInterval: 1000});
@@ -112,7 +116,7 @@ export default function App() {
       const SensorDataBoilerTop = dataFilter.filter((item)=> item.name === 'Boiler Top').map((item)=> item.temp)
       const SensorDataBoilerTopMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
       const SensorDataBoilerTopMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
-      const SensorDataBoilerTopCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp).slice(-1)[0])
+      const SensorDataBoilerTopCurrent=  dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp).slice(-1)[0]
       
       const SensorDataCoolerIn = dataFilter.filter((item)=> item.name === 'Cooler In').map((item)=> item.temp)
       const SensorDataCoolerInMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
@@ -122,7 +126,9 @@ export default function App() {
       const SensorDataCoolerOut = dataFilter.filter((item)=> item.name === 'Cooler Out').map((item)=> item.temp)
       const SensorDataCoolerOutMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
       const SensorDataCoolerOutMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
-      const SensorDataCoolerOutCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp).slice(-1)[0])
+      let SensorDataCoolerOutCurrent=  dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp).slice(-1)[0]
+
+      // SensorDataCoolerOutCurrent=  Intl.NumberFormat('de-DE', {minimumFractionDigits: 1,}).format(SensorDataCoolerOutCurrent)
     
       setSensorLabels(SensorLabel);
 
@@ -141,6 +147,7 @@ export default function App() {
       
     
     }
+    // console.log(width)
 
   },[data,from,to]);
   
@@ -300,7 +307,7 @@ const handelDateRangePickerTo = (newValue) => {
          style={{ gap: 15}}>
       
       {/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */}
-      <Grid item xs={9} sm={9} md={4.5}>
+      <Grid item xs={9} sm={9} md={3.5}>
       <Box
           sx={{
             bgcolor: 'background.paper',
@@ -328,10 +335,10 @@ const handelDateRangePickerTo = (newValue) => {
         <GaugeChart data={[70,10,10,10]} 
                     data1={[boilerTopCurrent, 100-boilerTopCurrent]} 
                     needleValue={boilerTopCurrent}   
-                    labels={['','Vorlauf','Mittellauf','Nachlauf']} 
+                    labels={['Heizen','Vorlauf','Mittellauf','Nachlauf']} 
                     color={[color04,color07,color06,color05]}
                     color1={[color01,'white']}  
-                    rotation={0} />
+                    display={0} />
           <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
           <p></p>
           {`Min: ${boilerTopMin}°C '      'Max: ${boilerTopMax}°C`} 
@@ -339,8 +346,42 @@ const handelDateRangePickerTo = (newValue) => {
       </Box>
       </Grid>
 
+            {/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */}
+            {/* <Grid item xs={9} sm={9} md={3.5}>
+      <Box
+          sx={{
+            bgcolor: 'background.paper',
+            boxShadow: 1,
+            borderRadius: 1,
+            p: 2,
+            //  width: 350 ,
+             hight: 200,
+          }}
+          >
+        <Grid 
+          container
+          justifyContent="space-between"
+          alignItems="center"
+        >
+          <Grid>
+            <Box sx={{ color: 'text.secondary' , display: 'inline'}}>Boiler Top</Box>
+          </Grid>
+          <Grid>
+            <Box sx={{ color: 'text.primary', fontSize: 34, fontWeight: 'medium' }}>
+            {`${boilerTopCurrent}°C`}
+            </Box>
+          </Grid>
+        </Grid>
+        <GaugePlugin/>
+          <Box sx={{ color: 'text.secondary', fontSize: 12 }}>
+          <p></p>
+          {`Min: ${boilerTopMin}°C '      'Max: ${boilerTopMax}°C`} 
+          </Box>
+      </Box>
+      </Grid> */}
+
       {/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */}
-      <Grid item xs={9} sm={9} md={4.5}>
+      <Grid item xs={9} sm={9} md={3.5}>
       <Box
           sx={{
             bgcolor: 'background.paper',
@@ -406,7 +447,7 @@ const handelDateRangePickerTo = (newValue) => {
 
       
      
-      <Grid Grid item xs={9} sm={9} md={9.1}>
+      <Grid Grid item xs={9} sm={9} md={7.1}>
       <Card >
       <CardHeader 
         avatar={
