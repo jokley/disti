@@ -1,13 +1,15 @@
 #FROM arm32v7/node:lts-alpine3.12 as BUILD_IMAGE
 FROM node:lts-alpine as BUILD_IMAGE
 ENV NODE_OPTIONS="--openssl-legacy-provider"
+RUN curl -sSf https://gobinaries.com/tj/node-prune | sh
+
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 
 # install dependencies
-RUN npm install --legacy-peer-deps
+RUN npm ci
 
 COPY . .
 
