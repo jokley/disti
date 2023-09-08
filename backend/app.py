@@ -302,7 +302,8 @@ def handle_car(car_id):
     
 #if __name__ == "__main__":
     #app.run(host="0.0.0.0",port=5001, debug=True)
-        from db_models import Sensor,People,CarsModel
+     
         db.create_all()
-        db.session.commit()
-        db.create_all()
+
+
+
