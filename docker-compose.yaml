@@ -2,8 +2,7 @@ version: "3.8"
 
 services:
   pgadmin:
-    #image: biarms/pgadmin4
-    image: benuhx/pgadmin4-pi:latest
+    image: biarms/pgadmin4
     container_name: pgadmin
     restart: always
     environment:
