@@ -38,9 +38,9 @@ app.config['MQTT_KEEPALIVE'] =60
 
 app.secret_key = 'hi'
 
-#db = SQLAlchemy(app)
-#ma = Marshmallow(app)
-#mqtt = Mqtt(app)
+db = SQLAlchemy(app)
+ma = Marshmallow(app)
+mqtt = Mqtt(app)
 mqtt.subscribe("/sensors")
 
 
