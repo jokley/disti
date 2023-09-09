@@ -323,7 +323,7 @@ def default_route():
     #app.run(host="0.0.0.0",port=5001, debug=True)
 
 
- with app.app_context():
+with app.app_context():
     db.create_all()
      
         
