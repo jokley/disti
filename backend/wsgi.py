@@ -1,6 +1,6 @@
 from app import app
 import logging
-# from flask_mqtt import Mqtt
+from flask_mqtt import Mqtt
 
 
 
