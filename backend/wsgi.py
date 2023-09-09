@@ -1,7 +1,7 @@
 from app import app
 import logging
 from flask_mqtt import Mqtt
-from flask_sqlalchemy import SQLAlchemy
+
 
 
 if __name__ != '__main__':
@@ -12,8 +12,6 @@ if __name__ != '__main__':
     mqtt = Mqtt(app)
     mqtt.subscribe("/sensors")  
     
-    db = SQLAlchemy(app)
-    db.create_all()
 
 if __name__ == "__main__":
     app.run()
