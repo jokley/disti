@@ -1,20 +1,20 @@
 version: "3.8"
 
 services:
-  pgadmin:
-    image: biarms/pgadmin4
-    container_name: pgadmin
-    restart: always
-    environment:
-      PGADMIN_DEFAULT_EMAIL: root@root.com
-      PGADMIN_DEFAULT_PASSWORD: root
-    volumes:
-      - pgadmin-data:/var/lib/pgadmin
-    ports:
-      - "5050:5050"
-    networks:
-      example-network:
-        ipv4_address: 172.16.238.10
+  # pgadmin:
+  #   image: biarms/pgadmin4
+  #   container_name: pgadmin
+  #   restart: always
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: root@root.com
+  #     PGADMIN_DEFAULT_PASSWORD: root
+  #   volumes:
+  #     - pgadmin-data:/var/lib/pgadmin
+  #   ports:
+  #     - "5050:5050"
+  #   networks:
+  #     example-network:
+  #       ipv4_address: 172.16.238.10
 
   postgres:
     image: postgres
@@ -50,6 +50,8 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
+    depends_on:
+      - mqtt
     ports:
       - "5000:5000"
     networks:
