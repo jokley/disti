@@ -38,10 +38,10 @@ app.config['MQTT_KEEPALIVE'] =60
 
 app.secret_key = 'hi'
 
-db = SQLAlchemy(app)
-ma = Marshmallow(app)
-mqtt = Mqtt(app)
-#mqtt.subscribe("/sensors")
+#db = SQLAlchemy(app)
+#ma = Marshmallow(app)
+#mqtt = Mqtt(app)
+mqtt.subscribe("/sensors")
 
 
 class Sensor(db.Model):

@@ -10,7 +10,8 @@ if __name__ != '__main__':
     app.logger.setLevel(gunicorn_logger.level)
     
     mqtt = Mqtt(app)
-    mqtt.subscribe("/sensors")  
+    db = SQLAlchemy(app)
+    ma = Marshmallow(app)
     
 
 if __name__ == "__main__":
