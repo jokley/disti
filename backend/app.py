@@ -113,6 +113,7 @@ cars_schema = CarSchema(many=True)
     
 @mqtt.on_message()
 def handle_message(client, userdata, message):
+   app.logger.info(message)
    if message.topic == "/sensors":
        #print(message.payload.decode())
        data = json.loads(message.payload.decode())
@@ -123,7 +124,7 @@ def handle_message(client, userdata, message):
        
        db.session.add(new_sensor)
        db.session.commit()
-       app.logger.info(new_sensor)
+      
 
 
 # @mqtt.on_connect()
