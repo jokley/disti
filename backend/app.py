@@ -34,7 +34,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_KEEPALIVE'] =60
-
+app.config['MQTT_CLIENT_ID']= 'flask_mqtt'
 
 app.secret_key = 'hi'
 
@@ -132,10 +132,11 @@ def handle_message(client, userdata, message):
       
 
 
-# @mqtt.on_connect()
-# def handle_connect(client, userdata, flags, rc):
-#     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-#     mqtt.subscribe("/sensors")
+@mqtt.on_connect()
+def handle_connect(client, userdata, flags, rc):
+    print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
+    mqtt.subscribe("/sensors")
+    app.logger.info("connected")
         
 
 # @mqtt.on_subscribe()
@@ -153,10 +154,9 @@ def handle_message(client, userdata, message):
 #     print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
     
 
-# @mqtt.on_log()
-# def handle_logging(client, userdata, level, buf):
-#     print(level, buf)
-
+@mqtt.on_log()
+def handle_logging(client, userdata, level, buf):
+     app.logger.info(level, buf)
 
 
 @app.route('/')
@@ -166,6 +166,12 @@ def home():
 @app.route('/time')
 def time():
     return jsonify(get_timestamp_now_epoche(),get_timestamp_now(),get_timestamp_now_offset())
+
+
+@app.route('/mqtt_subscribe')
+def mqtt_subscribe():
+    mqtt.subscribe("/sensors")
+    return jsonify("subscribe topic /sensors")
 
  
 @app.route("/persons")
