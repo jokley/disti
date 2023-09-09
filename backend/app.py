@@ -109,9 +109,9 @@ car_schema = CarSchema()
 cars_schema = CarSchema(many=True)
 
 
-#@mqtt.on_connect()
-#def handle_connect(client, userdata, flags, rc):
-   #mqtt.subscribe("/sensors")
+@mqtt.on_connect()
+def handle_connect(client, userdata, flags, rc):
+   mqtt.subscribe("/sensors")
     
 mqtt.subscribe("/sensors")
     
