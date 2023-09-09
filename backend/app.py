@@ -110,12 +110,6 @@ class CarSchema(SQLAlchemyAutoSchema):
 car_schema = CarSchema()
 cars_schema = CarSchema(many=True)
 
-
-@mqtt.on_connect()
-def handle_connect(client, userdata, flags, rc):
-    print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-    mqtt.subscribe("/sensors")
-
     
 @mqtt.on_message()
 def handle_message(client, userdata, message):
@@ -129,7 +123,12 @@ def handle_message(client, userdata, message):
        
        db.session.add(new_sensor)
        db.session.commit()
-        
+
+
+# @mqtt.on_connect()
+# def handle_connect(client, userdata, flags, rc):
+#     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
+#     mqtt.subscribe("/sensors")
         
 
 # @mqtt.on_subscribe()
@@ -147,9 +146,9 @@ def handle_message(client, userdata, message):
 #     print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
     
 
-@mqtt.on_log()
-def handle_logging(client, userdata, level, buf):
-    print(level, buf)
+# @mqtt.on_log()
+# def handle_logging(client, userdata, level, buf):
+#     print(level, buf)
 
 
 
