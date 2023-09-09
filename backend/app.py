@@ -41,7 +41,7 @@ app.secret_key = 'hi'
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 mqtt = Mqtt(app)
-mqtt.subscribe("/sensors")
+
 
 
 class Sensor(db.Model):
@@ -109,6 +109,11 @@ class CarSchema(SQLAlchemyAutoSchema):
 
 car_schema = CarSchema()
 cars_schema = CarSchema(many=True)
+
+
+mqtt.subscribe("/sensors")
+mqtt.subscribe("/sensors")
+mqtt.subscribe("/sensors")
 
     
 @mqtt.on_message()
