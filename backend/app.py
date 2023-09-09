@@ -133,10 +133,9 @@ def handle_message(client, userdata, message):
 
 
 @mqtt.on_connect()
- mqtt.subscribe("/sensors")
-# def handle_connect(client, userdata, flags, rc):
+def handle_connect(client, userdata, flags, rc):
+      mqtt.subscribe("/sensors")
 #     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-#     mqtt.subscribe("/sensors")
 #     app.logger.info("connected")
         
 
