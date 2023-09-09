@@ -33,7 +33,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
-app.config['MQTT_KEEPALIVE'] =20
+app.config['MQTT_KEEPALIVE'] =60
 
 
 app.secret_key = 'hi'
