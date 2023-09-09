@@ -118,7 +118,6 @@ mqtt.subscribe("/sensors")
     
 @mqtt.on_message()
 def handle_message(client, userdata, message):
-   app.logger.info(message)
    if message.topic == "/sensors":
        #print(message.payload.decode())
        data = json.loads(message.payload.decode())
@@ -132,11 +131,11 @@ def handle_message(client, userdata, message):
       
 
 
-@mqtt.on_connect()
-def handle_connect(client, userdata, flags, rc):
-    print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-    mqtt.subscribe("/sensors")
-    app.logger.info("connected")
+# @mqtt.on_connect()
+# def handle_connect(client, userdata, flags, rc):
+#     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
+#     mqtt.subscribe("/sensors")
+#     app.logger.info("connected")
         
 
 # @mqtt.on_subscribe()
@@ -154,9 +153,9 @@ def handle_connect(client, userdata, flags, rc):
 #     print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
     
 
-@mqtt.on_log()
-def handle_logging(client, userdata, level, buf):
-     app.logger.info(level, buf)
+# @mqtt.on_log()
+# def handle_logging(client, userdata, level, buf):
+#      app.logger.info(level, buf)
 
 
 @app.route('/')
