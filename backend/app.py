@@ -41,7 +41,7 @@ app.secret_key = 'hi'
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 mqtt = Mqtt(app)
-mqtt.subscribe("/sensors")
+#mqtt.subscribe("/sensors")
 
 
 class Sensor(db.Model):
@@ -299,7 +299,7 @@ def handle_car(car_id):
 #if __name__ == "__main__":
     #app.run(host="0.0.0.0",port=5001, debug=True)
      
-        db.create_all()
+        
         
 
 
