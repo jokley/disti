@@ -41,6 +41,8 @@ app.secret_key = 'hi'
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 mqtt = Mqtt(app)
+mqtt.subscribe("/sensors")
+
 
 class Sensor(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -109,7 +111,11 @@ car_schema = CarSchema()
 cars_schema = CarSchema(many=True)
 
 
-    
+@mqtt.on_connect()
+def handle_connect(client, userdata, flags, rc):
+    print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
+    mqtt.subscribe("/sensors")
+
     
 @mqtt.on_message()
 def handle_message(client, userdata, message):
@@ -125,10 +131,6 @@ def handle_message(client, userdata, message):
        db.session.commit()
         
         
-@mqtt.on_connect()
-def handle_connect(client, userdata, flags, rc):
-    print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-    mqtt.subscribe("/sensors")
 
 # @mqtt.on_subscribe()
 # def handle_subscribe(client, userdata, mid, granted_qos):
@@ -299,7 +301,6 @@ def handle_car(car_id):
     #app.run(host="0.0.0.0",port=5001, debug=True)
      
         db.create_all()
-        mqtt.subscribe("/sensors")
-
+        
 
 
