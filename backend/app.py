@@ -295,6 +295,16 @@ def handle_car(car_id):
         db.session.delete(car)
         db.session.commit()
         return {"message": f"Car {car.name} successfully deleted."}
+
+@app.route('/logging')
+def default_route():
+    """Default route"""
+    app.logger.debug('this is a DEBUG message')
+    app.logger.info('this is an INFO message')
+    app.logger.warning('this is a WARNING message')
+    app.logger.error('this is an ERROR message')
+    app.logger.critical('this is a CRITICAL message')
+    return jsonify('hello world')
     
 #if __name__ == "__main__":
     #app.run(host="0.0.0.0",port=5001, debug=True)
