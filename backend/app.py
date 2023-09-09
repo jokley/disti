@@ -122,13 +122,12 @@ def handle_message(client, userdata, message):
        #print(message.payload.decode())
        data = json.loads(message.payload.decode())
        app.logger.info(data)
-       if data['type'] == "ds18b20":
-           new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp'],date=get_timestamp_now()) 
-       elif data['type'] == "si7021":
-           new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
-       
-       db.session.add(new_sensor)
-       db.session.commit()
+    #    if data['type'] == "ds18b20":
+    #        new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp'],date=get_timestamp_now()) 
+    #    elif data['type'] == "si7021":
+    #        new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
+    #    db.session.add(new_sensor)
+    #    db.session.commit()
       
 
 
