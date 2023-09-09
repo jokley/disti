@@ -123,6 +123,7 @@ def handle_message(client, userdata, message):
        
        db.session.add(new_sensor)
        db.session.commit()
+       app.logger.info(new_sensor)
 
 
 # @mqtt.on_connect()
