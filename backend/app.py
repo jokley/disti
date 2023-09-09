@@ -110,8 +110,6 @@ cars_schema = CarSchema(many=True)
 
 
     
-mqtt.subscribe("/sensors")
-    
     
 @mqtt.on_message()
 def handle_message(client, userdata, message):
@@ -132,19 +130,19 @@ def handle_connect(client, userdata, flags, rc):
     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
     mqtt.subscribe("/sensors")
 
-@mqtt.on_subscribe()
-def handle_subscribe(client, userdata, mid, granted_qos):
-    print('on_subscribe client : {} userdata :{} mid :{} granted_qos:{}'.format(client, userdata, mid, granted_qos))
+# @mqtt.on_subscribe()
+# def handle_subscribe(client, userdata, mid, granted_qos):
+#     print('on_subscribe client : {} userdata :{} mid :{} granted_qos:{}'.format(client, userdata, mid, granted_qos))
 
 
-@mqtt.on_message()
-def handle_message(client, userdata, message):
-    print('on_message client : {} userdata :{} message.topic :{} message.payload :{}'.format(
-    	client, userdata, message.topic, message.payload.decode()))
+# @mqtt.on_message()
+# def handle_message(client, userdata, message):
+#     print('on_message client : {} userdata :{} message.topic :{} message.payload :{}'.format(
+#     	client, userdata, message.topic, message.payload.decode()))
 
-@mqtt.on_disconnect()
-def handle_disconnect(client, userdata, rc):
-    print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
+# @mqtt.on_disconnect()
+# def handle_disconnect(client, userdata, rc):
+#     print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
     
 
 @mqtt.on_log()
@@ -301,6 +299,7 @@ def handle_car(car_id):
     #app.run(host="0.0.0.0",port=5001, debug=True)
      
         db.create_all()
+        mqtt.subscribe("/sensors")
 
 
 
