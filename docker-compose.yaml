@@ -41,6 +41,8 @@ services:
       - mqtt
     ports:
       - "5000:5000"
+    env_file:
+      - disti.env
     networks:
       example-network:
         ipv4_address: 172.16.238.13
