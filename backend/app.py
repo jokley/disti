@@ -6,7 +6,10 @@ from datetime import datetime
 import pytz
 from flask_cors import CORS
 from flask_mqtt import Mqtt
+import sys
+import os
 
+load_dotenv()
 
 #TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
 #TIMESTAMP_NOW_OFFSET = pytz.timezone("Europe/Berlin").utcoffset(datetime.now()).total_seconds()
@@ -33,8 +36,10 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
-app.config['MQTT_KEEPALIVE'] =60
+app.config['MQTT_KEEPALIVE'] = 60
 app.config['MQTT_CLIENT_ID']= 'flask_mqtt'
+app.config['MQTT_CLIENT_ID'] = os.getenv("DOCKER_MQTT_INIT_U")
+app.config['MQTT_CLIENT_ID'] = os.getenv("DOCKER_MQTT_INIT_ORG")
 
 app.secret_key = 'hi'
 
