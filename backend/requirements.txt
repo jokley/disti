@@ -8,4 +8,4 @@ marshmallow_sqlalchemy
 psycopg2-binary
 datetime
 pytz
-
+python-dotenv
