@@ -6,6 +6,7 @@ from datetime import datetime
 import pytz
 from flask_cors import CORS
 from flask_mqtt import Mqtt
+from dotenv import load_dotenv
 import sys
 import os
 
