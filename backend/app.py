@@ -147,11 +147,11 @@ def handle_message(client, userdata, message):
             db.session.add(new_sensor)
             db.session.commit()
 
-# @mqtt.on_connect()
-# def handle_connect(client, userdata, flags, rc):
-#       mqtt.subscribe("sensors/#")
-#     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-#     app.logger.info("connected")
+@mqtt.on_connect()
+def handle_connect(client, userdata, flags, rc):
+      mqtt.subscribe("sensors/#")
+      #print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
+      app.logger.info("connected")
         
 
 # @mqtt.on_subscribe()
