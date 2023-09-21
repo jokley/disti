@@ -127,7 +127,7 @@ mqtt.subscribe("sensors/#")
 def handle_message(client, userdata, message):
     topic = message.topic
     x = topic.split("/")
-
+    
    if x[0] == "sensors":
        #print(message.payload.decode())
        data = json.loads(message.payload.decode())
