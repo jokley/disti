@@ -118,7 +118,6 @@ car_schema = CarSchema()
 cars_schema = CarSchema(many=True)
 
 
-
 mqtt.subscribe("sensors/#")
 mqtt.subscribe("sensors/#")
 mqtt.subscribe("sensors/#")
@@ -126,7 +125,7 @@ mqtt.subscribe("sensors/#")
     
 @mqtt.on_message()
 def handle_message(client, userdata, message):
-    app.logger.info('message')
+    app.logger.info(message.topic)
     topic = message.topic
     x = topic.split("/")
 
