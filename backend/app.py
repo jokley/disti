@@ -118,14 +118,16 @@ car_schema = CarSchema()
 cars_schema = CarSchema(many=True)
 
 
-mqtt.subscribe("/sensors")
-mqtt.subscribe("/sensors")
-mqtt.subscribe("/sensors")
+mqtt.subscribe("sensors/#")
+mqtt.subscribe("sensors/#")
+mqtt.subscribe("sensors/#")
 
     
 @mqtt.on_message()
 def handle_message(client, userdata, message):
-   if message.topic == "/sensors":
+    topic =  message.topic 
+    x = topic.split("/")
+   if x[0] == "sensors":
        #print(message.payload.decode())
        data = json.loads(message.payload.decode())
        app.logger.info(data)
@@ -141,7 +143,7 @@ def handle_message(client, userdata, message):
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-      mqtt.subscribe("/sensors")
+      mqtt.subscribe("sensors/#")
 #     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
 #     app.logger.info("connected")
         
@@ -177,8 +179,8 @@ def time():
 
 @app.route('/mqtt_subscribe')
 def mqtt_subscribe():
-    mqtt.subscribe("/sensors")
-    return jsonify("subscribe topic /sensors")
+    mqtt.subscribe("sensors/#")
+    return jsonify("subscribe topic sensors/#")
 
  
 @app.route("/persons")
