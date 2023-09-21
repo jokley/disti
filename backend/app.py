@@ -184,8 +184,8 @@ def time():
 
 @app.route('/mqtt_subscribe')
 def mqtt_subscribe():
-    mqtt.subscribe("/sensors")
-    return jsonify("subscribe topic /sensors")
+    mqtt.subscribe("sensors/#")
+    return jsonify("subscribe topic sensors/#")
 
  
 @app.route("/persons")
