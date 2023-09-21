@@ -111,50 +111,47 @@ car_schema = CarSchema()
 cars_schema = CarSchema(many=True)
 
 
-
+mqtt.subscribe("/sensors")
+mqtt.subscribe("/sensors")
+mqtt.subscribe("/sensors")
 
     
-# @mqtt.on_message()
-# def handle_message(client, userdata, message):
-#    if message.topic == 'sensors/#':
-#        #print(message.payload.decode())
-#        data = json.loads(message.payload.decode())
-#        app.logger.info(data)
-#        if data['type'] == "ds18b20":
-#            new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp'],date=get_timestamp_now()) 
-#        elif data['type'] == "si7021":
-#            new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
-#        with app.app_context():
-#         db.session.add(new_sensor)
-#         db.session.commit()
-      
 @mqtt.on_message()
 def handle_message(client, userdata, message):
-    text = message.topic
-    x = text.split("/")
-    app.logger.info(message.topic)
-    app.logger.info(x[0])
-    if x[0] == "sensors":
-        #print(message.payload.decode())
-        data = json.loads(message.payload.decode())
-        if x[3] == "ds18b20":
-            new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],date=get_timestamp_now()) 
-        elif x[3]== "si7021":
-            new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
-        with app.app_context():
-            db.session.add(new_sensor)
-            db.session.commit()
+   if message.topic == "/sensors":
+       #print(message.payload.decode())
+       data = json.loads(message.payload.decode())
+       app.logger.info(data)
+       if data['type'] == "ds18b20":
+           new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp'],date=get_timestamp_now()) 
+       elif data['type'] == "si7021":
+           new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
+       with app.app_context():
+        db.session.add(new_sensor)
+        db.session.commit()
+      
+# @mqtt.on_message()
+# def handle_message(client, userdata, message):
+#     text = message.topic
+#     x = text.split("/")
+#     app.logger.info(message.topic)
+#     app.logger.info(x[0])
+#     if x[0] == "sensors":
+#         #print(message.payload.decode())
+#         data = json.loads(message.payload.decode())
+#         if x[3] == "ds18b20":
+#             new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],date=get_timestamp_now()) 
+#         elif x[3]== "si7021":
+#             new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
+#         with app.app_context():
+#             db.session.add(new_sensor)
+#             db.session.commit()
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-      mqtt.subscribe('sensors/#')
+      mqtt.subscribe("/sensors")
 #     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
 #     app.logger.info("connected")
-
-
-mqtt.subscribe('sensors/#')
-mqtt.subscribe('sensors/#')
-mqtt.subscribe('sensors/#')
         
 
 # @mqtt.on_subscribe()
@@ -188,8 +185,8 @@ def time():
 
 @app.route('/mqtt_subscribe')
 def mqtt_subscribe():
-    mqtt.subscribe('sensors/#')
-    return jsonify("subscribe topic sensors/#")
+    mqtt.subscribe("/sensors")
+    return jsonify("subscribe topic /sensors")
 
  
 @app.route("/persons")
