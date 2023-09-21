@@ -140,7 +140,6 @@ def handle_message(client, userdata, message):
     text = message.topic
     x = text.split("/")
     app.logger.info(message.topic)
-    app.logger.info(x[0])
     if x[0] == "sensors":
         #print(message.payload.decode())
         data = json.loads(message.payload.decode())
