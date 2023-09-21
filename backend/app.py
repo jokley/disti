@@ -131,7 +131,7 @@ def handle_message(client, userdata, message):
     if x[0] == "sensors":
         #print(message.payload.decode())
         data = json.loads(message.payload.decode())
-        app.logger.info(data)
+        app.logger.info(name=x[2], type=x[3], temp=data['temp'],date=get_timestamp_now())
         if x[3] == "ds18b20":
             new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],date=get_timestamp_now()) 
         elif x[3]== "si7021":
