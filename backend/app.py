@@ -6,11 +6,7 @@ from datetime import datetime
 import pytz
 from flask_cors import CORS
 from flask_mqtt import Mqtt
-from dotenv import load_dotenv
-import sys
-import os
 
-load_dotenv()
 
 #TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
 #TIMESTAMP_NOW_OFFSET = pytz.timezone("Europe/Berlin").utcoffset(datetime.now()).total_seconds()
@@ -37,11 +33,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
-app.config['MQTT_USERNAME'] = os.getenv("DOCKER_MQTT_INIT_USERNAME")
-app.config['MQTT_PASSWORD'] = os.getenv("DOCKER_MQTT_INIT_PASSWORD")
-app.config['MQTT_KEEPALIVE'] = 60
+app.config['MQTT_KEEPALIVE'] =60
 app.config['MQTT_CLIENT_ID']= 'flask_mqtt'
-
 
 app.secret_key = 'hi'
 
@@ -125,27 +118,37 @@ mqtt.subscribe("sensors/#")
     
 @mqtt.on_message()
 def handle_message(client, userdata, message):
-    app.logger.info(message.topic)
-    topic = message.topic
-    x = topic.split("/")
+   if message.topic == "sensors/#":
+       #print(message.payload.decode())
+       data = json.loads(message.payload.decode())
+       app.logger.info(data)
+       if data['type'] == "ds18b20":
+           new_sensor =  Sensor(name=data['name'],type=data['type'], temp=data['temp'],date=get_timestamp_now()) 
+       elif data['type'] == "si7021":
+           new_sensor =  Sensor(name=data['name'],type=data['type'],temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
+       with app.app_context():
+        db.session.add(new_sensor)
+        db.session.commit()
+      
+# @mqtt.on_message()
+# def handle_message(client, userdata, message):
+#     topic = message.topic
+#     x = topic.split("/")
 
-    if x[0] == "sensors":
-        #print(message.payload.decode())
-        data = json.loads(message.payload.decode())
-        app.logger.info(name=x[2], type=x[3], temp=data['temp'],date=get_timestamp_now())
-        if x[3] == "ds18b20":
-            new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],date=get_timestamp_now()) 
-        elif x[3]== "si7021":
-            new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
-        with app.app_context():
-            db.session.add(new_sensor)
-            db.session.commit()
-        
-
+#     if x[0] == "sensors":
+#         #print(message.payload.decode())
+#         data = json.loads(message.payload.decode())
+#         if x[3] == "ds18b20":
+#             new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],date=get_timestamp_now()) 
+#         elif x[3]== "si7021":
+#             new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
+#         with app.app_context():
+#             db.session.add(new_sensor)
+#             db.session.commit()
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-      mqtt.subscribe("sensors/#")
+      mqtt.subscribe("/sensors")
 #     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
 #     app.logger.info("connected")
         
@@ -181,8 +184,8 @@ def time():
 
 @app.route('/mqtt_subscribe')
 def mqtt_subscribe():
-    mqtt.subscribe("sensors/#")
-    return jsonify("subscribe topic sensors/#")
+    mqtt.subscribe("/sensors")
+    return jsonify("subscribe topic /sensors")
 
  
 @app.route("/persons")
