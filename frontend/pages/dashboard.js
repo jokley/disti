@@ -94,7 +94,7 @@ export default function App() {
   const { data, error } = useSWR(url,{refreshInterval: 1000});
 
   useEffect(() => { 
- 
+
     if (data){
 
 
@@ -105,28 +105,28 @@ export default function App() {
       
 
 
-      let SensorLabel = dataFilter.filter((item)=> item.name === 'Boiler Top').map((item)=> new Date(item.date).toLocaleString('DE-AT', { hour: '2-digit', minute: '2-digit'}));
+      let SensorLabel = dataFilter.filter((item)=> item.name === 'BoilerTop').map((item)=> new Date(item.date).toLocaleString('DE-AT', { hour: '2-digit', minute: '2-digit'}));
       SensorLabel = SensorLabel.sort((a, b) => a - b );
 
-      const SensorDataBoilerBottom = dataFilter.filter((item)=> item.name === 'Boiler Bottom').map((item)=> item.temp)
-      const SensorDataBoilerBottomMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
-      const SensorDataBoilerBottomMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp)))
-      const SensorDataBoilerBottomCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'Boiler Bottom').map((item) => item.temp).slice(-1)[0])
+      const SensorDataBoilerBottom = dataFilter.filter((item)=> item.name === 'BoilerBottom').map((item)=> item.temp)
+      const SensorDataBoilerBottomMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'BoilerBottom').map((item) => item.temp)))
+      const SensorDataBoilerBottomMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'BoilerBottom').map((item) => item.temp)))
+      const SensorDataBoilerBottomCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'BoilerBottom').map((item) => item.temp).slice(-1)[0])
     
-      const SensorDataBoilerTop = dataFilter.filter((item)=> item.name === 'Boiler Top').map((item)=> item.temp)
-      const SensorDataBoilerTopMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
-      const SensorDataBoilerTopMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp)))
-      const SensorDataBoilerTopCurrent=  dataFilter.filter((item) =>  item.name === 'Boiler Top').map((item) => item.temp).slice(-1)[0]
+      const SensorDataBoilerTop = dataFilter.filter((item)=> item.name === 'BoilerTop').map((item)=> item.temp)
+      const SensorDataBoilerTopMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'BoilerTop').map((item) => item.temp)))
+      const SensorDataBoilerTopMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'BoilerTop').map((item) => item.temp)))
+      const SensorDataBoilerTopCurrent=  dataFilter.filter((item) =>  item.name === 'BoilerTop').map((item) => item.temp).slice(-1)[0]
       
-      const SensorDataCoolerIn = dataFilter.filter((item)=> item.name === 'Cooler In').map((item)=> item.temp)
-      const SensorDataCoolerInMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
-      const SensorDataCoolerInMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp)))
-      const SensorDataCoolerInCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'Cooler In').map((item) => item.temp).slice(-1)[0])
+      const SensorDataCoolerIn = dataFilter.filter((item)=> item.name === 'CoolerIn').map((item)=> item.temp)
+      const SensorDataCoolerInMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'CoolerIn').map((item) => item.temp)))
+      const SensorDataCoolerInMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'CoolerIn').map((item) => item.temp)))
+      const SensorDataCoolerInCurrent=  Math.round(dataFilter.filter((item) =>  item.name === 'CoolerIn').map((item) => item.temp).slice(-1)[0])
       
-      const SensorDataCoolerOut = dataFilter.filter((item)=> item.name === 'Cooler Out').map((item)=> item.temp)
-      const SensorDataCoolerOutMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
-      const SensorDataCoolerOutMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp)))
-      let SensorDataCoolerOutCurrent=  dataFilter.filter((item) =>  item.name === 'Cooler Out').map((item) => item.temp).slice(-1)[0]
+      const SensorDataCoolerOut = dataFilter.filter((item)=> item.name === 'CoolerOut').map((item)=> item.temp)
+      const SensorDataCoolerOutMax = Math.round(Math.max.apply(null, dataFilter.filter((item) =>  item.name === 'CoolerOut').map((item) => item.temp)))
+      const SensorDataCoolerOutMin =  Math.round(Math.min.apply(null, dataFilter.filter((item) =>  item.name === 'CoolerOut').map((item) => item.temp)))
+      let SensorDataCoolerOutCurrent=  dataFilter.filter((item) =>  item.name === 'CoolerOut').map((item) => item.temp).slice(-1)[0]
 
       // SensorDataCoolerOutCurrent=  Intl.NumberFormat('de-DE', {minimumFractionDigits: 1,}).format(SensorDataCoolerOutCurrent)
     
