@@ -118,9 +118,10 @@ car_schema = CarSchema()
 cars_schema = CarSchema(many=True)
 
 
-mqtt.subscribe("sensors/#")
-# mqtt.subscribe("sensors/#")
-# mqtt.subscribe("sensors/#")
+with app.app_context():
+    mqtt.subscribe("sensors/#")
+    # mqtt.subscribe("sensors/#")
+    # mqtt.subscribe("sensors/#")
 
     
 @mqtt.on_message()
