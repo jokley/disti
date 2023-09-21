@@ -119,8 +119,8 @@ cars_schema = CarSchema(many=True)
 
 
 mqtt.subscribe("sensors/#")
-mqtt.subscribe("sensors/#")
-mqtt.subscribe("sensors/#")
+# mqtt.subscribe("sensors/#")
+# mqtt.subscribe("sensors/#")
 
     
 @mqtt.on_message()
