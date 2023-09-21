@@ -110,15 +110,15 @@ class CarSchema(SQLAlchemyAutoSchema):
 car_schema = CarSchema()
 cars_schema = CarSchema(many=True)
 
-
-mqtt.subscribe("sensors/espEasy")
-mqtt.subscribe("sensors/espEasy")
-mqtt.subscribe("sensors/espEasy")
+mqtt.unsubscribe_all()
+mqtt.subscribe('sensors/#')
+mqtt.subscribe('sensors/#')
+mqtt.subscribe('sensors/#')
 
     
 # @mqtt.on_message()
 # def handle_message(client, userdata, message):
-#    if message.topic == "sensors/#":
+#    if message.topic == 'sensors/#':
 #        #print(message.payload.decode())
 #        data = json.loads(message.payload.decode())
 #        app.logger.info(data)
@@ -149,9 +149,9 @@ def handle_message(client, userdata, message):
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-      mqtt.subscribe("sensors/espEasy")
-      #print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-      app.logger.info("connected")
+      mqtt.subscribe('sensors/#')
+#     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
+#     app.logger.info("connected")
         
 
 # @mqtt.on_subscribe()
@@ -185,7 +185,7 @@ def time():
 
 @app.route('/mqtt_subscribe')
 def mqtt_subscribe():
-    mqtt.subscribe("sensors/#")
+    mqtt.subscribe('sensors/#')
     return jsonify("subscribe topic sensors/#")
 
  
