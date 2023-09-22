@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import sys
 import os
 
-
+load_dotenv()
 
 
 #TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
@@ -32,7 +32,7 @@ def get_timestamp_now_epoche():
 
 app = Flask(__name__)
 CORS(app)
-load_dotenv()
+
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@postgres/flasksql'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -154,9 +154,9 @@ def handle_message(client, userdata, message):
             db.session.add(new_sensor)
             db.session.commit()
 
-# @mqtt.on_connect()
-# def handle_connect(client, userdata, flags, rc):
-#       mqtt.subscribe("sensors/#")
+@mqtt.on_connect()
+def handle_connect(client, userdata, flags, rc):
+      mqtt.subscribe("sensors/#")
 # #     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
 #       app.logger.info("connected")
 #       app.logger.info("topoic subscribed sensors/#")
@@ -177,9 +177,9 @@ def handle_message(client, userdata, message):
 #     print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
     
 
-# @mqtt.on_log()
-# def handle_logging(client, userdata, level, buf):
-#      app.logger.info(level, buf)
+@mqtt.on_log()
+def handle_logging(client, userdata, level, buf):
+     app.logger.info(level, buf)
 
 
 @app.route('/')
@@ -351,5 +351,3 @@ with app.app_context():
      
         
         
-
-
