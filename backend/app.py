@@ -147,9 +147,9 @@ def handle_message(client, userdata, message):
         #print(message.payload.decode())
         data = json.loads(message.payload.decode())
         if x[3] == "ds18b20":
-            new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],date=get_timestamp_now()) 
+            new_sensor =  Sensor(name="{}".format(x[2]), type="{}".format(x[3]), temp=data['temp'],date=get_timestamp_now()) 
         elif x[3]== "si7021":
-            new_sensor =  Sensor(name=x[2], type=x[3], temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
+            new_sensor =  Sensor(name="{}".format(x[2]), type="{}".format(x[3]), temp=data['temp'],humi=data['humi'],date=get_timestamp_now())   
         with app.app_context():
             db.session.add(new_sensor)
             db.session.commit()
