@@ -69,7 +69,8 @@ services:
       - disti.env
     volumes:
       # Mount for influxdb data directory and configuration
-      - influxdbv2:/var/lib/influxdb2:rw
+      - influxdbv:/var/lib/influxdb:rw
+      - ./influxdb/influxdb.conf:/etc/influxdb/influxdb.conf
     ports:
       - "8086:8086"
     networks:
@@ -132,4 +133,4 @@ networks:
 volumes:
   db_data:
   pgadmin-data:
-  influxdbv2:
+  influxdbv:
