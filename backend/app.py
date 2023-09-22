@@ -48,7 +48,7 @@ app.secret_key = 'hi'
 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
-mqtt = Mqtt(app,connect_async=True)
+mqtt = Mqtt(app)
 
 
 
@@ -157,9 +157,9 @@ def handle_message(client, userdata, message):
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
       mqtt.subscribe("sensors/#")
-# #     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-#       app.logger.info("connected")
-#       app.logger.info("topoic subscribed sensors/#")
+      app.logger.info('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
+      app.logger.info("connected")
+      app.logger.info("topoic subscribed sensors/#")
         
 
 # @mqtt.on_subscribe()
@@ -177,9 +177,9 @@ def handle_connect(client, userdata, flags, rc):
 #     print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
     
 
-@mqtt.on_log()
-def handle_logging(client, userdata, level, buf):
-     app.logger.info(level, buf)
+# @mqtt.on_log()
+# def handle_logging(client, userdata, level, buf):
+#      app.logger.info(level, buf)
 
 
 @app.route('/')
