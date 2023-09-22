@@ -38,7 +38,7 @@ app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_USERNAME'] = os.getenv("DOCKER_MQTT_INIT_USERNAME")
 app.config['MQTT_PASSWORD'] = os.getenv("DOCKER_MQTT_INIT_PASSWORD")
-app.config['MQTT_KEEPALIVE'] = 600
+app.config['MQTT_KEEPALIVE'] = 10
 app.config['MQTT_CLIENT_ID']= 'jokley_flask_mqtt'
 
 app.secret_key = 'hi'
