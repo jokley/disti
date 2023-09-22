@@ -45,7 +45,7 @@ app.secret_key = 'hi'
 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
-mqtt = Mqtt(app)
+mqtt = Mqtt(app,connect_async=True)
 
 
 
