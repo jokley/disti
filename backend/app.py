@@ -140,11 +140,11 @@ mqtt.subscribe("sensors/#")
       
 @mqtt.on_message()
 def handle_message(client, userdata, message):
-    text = message.topic
-    x = text.split("/")
+    # text = message.topic
+    # x = text.split("/")
     app.logger.info(message.topic)
-    data = json.loads(message.payload.decode())
-    app.logger.info({},{},{},{}).format(name=x[2], type=x[3], temp=data['temp'])
+    # data = json.loads(message.payload.decode())
+    # app.logger.info({},{},{},{}).format(name=x[2], type=x[3], temp=data['temp'])
     # if x[0] == "sensors":
     #     #print(message.payload.decode())
     #     data = json.loads(message.payload.decode())
