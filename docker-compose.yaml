@@ -56,10 +56,55 @@ services:
       #context: ./frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3010:3000"
     networks:
       example-network:
         ipv4_address: 172.16.238.14
+
+
+  influxdb:
+    image: influxdb:2.6-alpine
+    restart: unless-stopped
+    env_file:
+      - venti.env
+    volumes:
+      # Mount for influxdb data directory and configuration
+      - influxdbv2:/var/lib/influxdb2:rw
+    ports:
+      - "8086:8086"
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.16
+
+  telegraf:
+    image: arm64v8/telegraf:1.25
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+    volumes:
+      # Mount for telegraf config
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    env_file:
+      - venti.env
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.17
+
+  grafana:
+    image: grafana/grafana:9.2.3
+    restart: unless-stopped
+    env_file:
+      - venti.env
+    depends_on:
+      - influxdb
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./grafana/:/etc/grafana
+      - ./grafana/plugins/:/var/lib/grafana/plugins
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.18
         
         
   nginx:
@@ -73,7 +118,7 @@ services:
        - ./nginx/.htpasswd:/etc/nginx/.htpasswd
     networks:
       example-network:
-        ipv4_address: 172.16.238.15
+        ipv4_address: 172.16.238.10
 
 networks:
   example-network:
