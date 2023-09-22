@@ -11,7 +11,7 @@ import sys
 import os
 
 
-load_dotenv()
+
 
 #TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
 #TIMESTAMP_NOW_OFFSET = pytz.timezone("Europe/Berlin").utcoffset(datetime.now()).total_seconds()
@@ -32,6 +32,7 @@ def get_timestamp_now_epoche():
 
 app = Flask(__name__)
 CORS(app)
+load_dotenv()
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@postgres/flasksql'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
