@@ -78,7 +78,7 @@ services:
         ipv4_address: 172.16.238.16
 
   telegraf:
-    image: arm64v8/telegraf:1.25
+    image: arm32v7/telegraf
     restart: unless-stopped
     depends_on:
       - influxdb
