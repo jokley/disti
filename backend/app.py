@@ -155,7 +155,8 @@ def handle_message(client, userdata, message):
 def handle_connect(client, userdata, flags, rc):
       mqtt.subscribe("sensors/#")
 #     print('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-#     app.logger.info("connected")
+      app.logger.info("connected")
+      app.logger.info("topoic subscribed sensors/#")
         
 
 # @mqtt.on_subscribe()
