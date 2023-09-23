@@ -144,6 +144,7 @@ def handle_message(client, userdata, message):
 
     if data['type'] == "ds18b20":
         sTemp = data['temp']
+        sHumi = 0
     elif data['type'] == "si7021":
         sTemp = data['temp']
         sHumi = data['humi']
