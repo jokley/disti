@@ -37,7 +37,7 @@ CORS(app)
 
 def get_db_connection():
     conn = psycopg2.connect(host='postgres',
-                            database='postgres/flasksql',
+                            database='flasksql',
                             user=os.getenv("DOCKER_POSTGRES_INIT_USERNAME"),
                             password=os.getenv("DOCKER_POSTGRES_INIT_PASSWORD"))
     return conn
