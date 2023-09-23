@@ -70,7 +70,7 @@ services:
       - disti.env
     volumes:
       # Mount for influxdb data directory and configuration
-      - influxdbv:/var/lib/influxdb:rw
+      - influxdb:/var/lib/influxdb:rw
       - ./influxdb/influxdb.conf:/etc/influxdb/influxdb.conf
     ports:
       - "8086:8086"
