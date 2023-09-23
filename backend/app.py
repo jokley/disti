@@ -5,6 +5,7 @@ from flask import Flask, json, render_template, request,jsonify
 from datetime import datetime
 import pytz
 import psycopg2
+import psycopg2.extras
 from flask_cors import CORS
 from flask_mqtt import Mqtt
 from dotenv import load_dotenv
@@ -281,7 +282,8 @@ def sensor_test():
 @app.route('/sensors', methods=['GET'])
 def handle_sensor():
         conn = get_db_connection()
-        cur = conn.cursor()
+        #cur = conn.cursor()
+        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
         cur.execute('SELECT * FROM sensor;')
         sensors = cur.fetchall()
         cur.close()
