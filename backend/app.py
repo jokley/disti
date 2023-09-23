@@ -138,23 +138,23 @@ def handle_message(client, userdata, message):
       
     data = json.loads(message.payload.decode())
     app.logger.info(data)
-    # sName = data['name']
-    # sType = data['type']
+    sName = data['name']
+    sType = data['type']
 
-    # if data['type'] == "ds18b20":
-    #     sTemp = data['temp']
-    # elif data['type'] == "si7021":
-    #     sTemp = data['temp']
-    #     sHumi = data['humi']
+    if data['type'] == "ds18b20":
+        sTemp = data['temp']
+    elif data['type'] == "si7021":
+        sTemp = data['temp']
+        sHumi = data['humi']
        
-    # conn = get_db_connection()
-    # cur = conn.cursor()
-    # cur.execute('INSERT INTO sensor (name, type, temp, humi)'
-    #             'VALUES (%s, %s, %s, %s)',
-    #             (sName, sType, sTemp, sHumi))
-    # conn.commit()
-    # cur.close()
-    # conn.close()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('INSERT INTO sensor (name, type, temp, humi)'
+                'VALUES (%s, %s, %s, %s)',
+                (sName, sType, sTemp, sHumi))
+    conn.commit()
+    cur.close()
+    conn.close()
 
 # @mqtt.on_message()
 # def handle_message(client, userdata, message):
@@ -179,7 +179,7 @@ def handle_connect(client, userdata, flags, rc):
       mqtt.subscribe("sensors/#")
       app.logger.info('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
       app.logger.info("connected")
-      app.logger.info("topoic subscribed sensors/#")
+      app.logger.info("topic subscribed sensors/#")
         
 
 # @mqtt.on_subscribe()
