@@ -37,7 +37,7 @@ CORS(app)
 
 def get_db_connection():
     conn = psycopg2.connect(host='postgres',
-                            database='postges/flasksql',
+                            database='flasksql',
                             user=os.getenv("DOCKER_POSTGRES_INIT_USERNAME"),
                             password=os.getenv("DOCKER_POSTGRES_INIT_PASSWORD"))
     return conn
@@ -256,7 +256,7 @@ def mqtt_subscribe():
 #     return jsonify(sensors_schema.dump(all_senors))
 
 
-@app.route('/senors', methods=['GET'])
+@app.route('/sensors', methods=['GET'])
 def handle_sensor():
         conn = get_db_connection()
         cur = conn.cursor()
