@@ -53,9 +53,9 @@ mqtt = Mqtt(app)
 
 
 class Sensor(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-    type = db.Column(db.String(80), nullable=False)
+    id = db.Column(db.Integer)
+    name = db.Column(db.Text(), nullable=False)
+    type = db.Column(db.Text(), nullable=False)
     temp = db.Column(db.Float(2), nullable=True)
     humi = db.Column(db.Float(2), nullable=True)
     date = db.Column(db.DateTime(), nullable=False)
