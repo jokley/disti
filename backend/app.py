@@ -138,23 +138,23 @@ def handle_message(client, userdata, message):
       
     data = json.loads(message.payload.decode())
     app.logger.info(data)
-    sName = data['name']
-    sType = data['type']
+    # sName = data['name']
+    # sType = data['type']
 
-    if data['type'] == "ds18b20":
-        sTemp = data['temp']
-    elif data['type'] == "si7021":
-        sTemp = data['temp']
-        sHumi = data['humi']
+    # if data['type'] == "ds18b20":
+    #     sTemp = data['temp']
+    # elif data['type'] == "si7021":
+    #     sTemp = data['temp']
+    #     sHumi = data['humi']
        
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('INSERT INTO sensor (name, type, temp, humi)'
-                'VALUES (%s, %s, %s, %s)',
-                (sName, sType, sTemp, sHumi))
-    conn.commit()
-    cur.close()
-    conn.close()
+    # conn = get_db_connection()
+    # cur = conn.cursor()
+    # cur.execute('INSERT INTO sensor (name, type, temp, humi)'
+    #             'VALUES (%s, %s, %s, %s)',
+    #             (sName, sType, sTemp, sHumi))
+    # conn.commit()
+    # cur.close()
+    # conn.close()
 
 # @mqtt.on_message()
 # def handle_message(client, userdata, message):
@@ -217,10 +217,21 @@ def mqtt_subscribe():
     return jsonify("subscribe topic sensors/#")
 
  
-# @app.route("/persons")
-# def get_persons():
-#     all_people = People.query.all()
-#     return jsonify(poeples_schema.dump(all_people))
+@app.route("/sensor_test")
+def sensor_test():
+        sName = 'Outdoor'
+        sType ='si7021'
+        sTemp = 25
+        sHumi = 45
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('INSERT INTO sensor (name, type, temp, humi)'
+                    'VALUES (%s, %s, %s, %s)',
+                    (sName, sType, sTemp, sHumi))
+        conn.commit()
+        cur.close()
+        conn.close()
 
 
 # @app.route("/addperson")
