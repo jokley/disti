@@ -232,6 +232,7 @@ def sensor_test():
         conn.commit()
         cur.close()
         conn.close()
+        return jsonify('Insert')
 
 
 # @app.route("/addperson")
