@@ -133,5 +133,3 @@ networks:
 
 volumes:
   db_data:
-  pgadmin-data:
-  influxdb:
