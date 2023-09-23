@@ -134,4 +134,4 @@ networks:
 volumes:
   db_data:
   pgadmin-data:
-  influxdbv:
+  influxdb:
