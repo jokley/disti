@@ -54,8 +54,8 @@ app.config['MQTT_CLIENT_ID']= 'jokley_flask_mqtt'
 
 app.secret_key = 'hi'
 
-db = SQLAlchemy(app)
-ma = Marshmallow(app)
+# db = SQLAlchemy(app)
+# ma = Marshmallow(app)
 mqtt = Mqtt(app)
 
 
