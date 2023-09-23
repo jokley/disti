@@ -126,7 +126,7 @@ def handle_sensor():
 
 
 @app.route('/cars', methods=['GET'])
-def handle_sensor():
+def handle_cars():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
         cur.execute('SELECT * FROM cars;')
