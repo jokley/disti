@@ -120,8 +120,8 @@ def handle_sensor():
         FROM =request.args.get('from', default = get_timestamp_now_epoche()-36000, type = int)
         TO = request.args.get('to', default = get_timestamp_now_epoche(), type = int)
 
-        VON = datetime.fromtimestamp(int(FROM + get_timestamp_now_offset())).isoformat()
-        BIS = datetime.fromtimestamp(int(TO + get_timestamp_now_offset())).isoformat()  
+        VON = datetime.fromtimestamp(int(FROM)).isoformat()
+        BIS = datetime.fromtimestamp(int(TO)).isoformat()  
 
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
