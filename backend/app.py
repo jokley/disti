@@ -125,7 +125,7 @@ def handle_sensor():
 
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-        cur.execute('SELECT * FROM sensor where date between :von and :bis order by date;',von=VON, bis=BIS)
+        cur.execute('SELECT * FROM sensor where date between %s and %s order by date;',(VON, BIS))
         sensors = cur.fetchall()
         cur.close()
         conn.close()
