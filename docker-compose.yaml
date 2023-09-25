@@ -98,8 +98,8 @@ services:
     restart: unless-stopped
     env_file:
       - disti.env
-    depends_on:
-      - influxdb
+    # depends_on:
+    #   - influxdb
     ports:
       - '3000:3000'
     volumes:
