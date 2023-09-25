@@ -93,21 +93,21 @@ services:
   #     example-network:
   #       ipv4_address: 172.16.238.17
 
-  # grafana:
-  #   image: grafana/grafana:9.2.3
-  #   restart: unless-stopped
-  #   env_file:
-  #     - disti.env
-  #   depends_on:
-  #     - influxdb
-  #   ports:
-  #     - '3000:3000'
-  #   volumes:
-  #     - ./grafana/:/etc/grafana
-  #     - ./grafana/plugins/:/var/lib/grafana/plugins
-  #   networks:
-  #     example-network:
-  #       ipv4_address: 172.16.238.18
+  grafana:
+    image: grafana/grafana:9.2.3
+    restart: unless-stopped
+    env_file:
+      - disti.env
+    depends_on:
+      - influxdb
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./grafana/:/etc/grafana
+      - ./grafana/plugins/:/var/lib/grafana/plugins
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.18
         
         
   nginx:

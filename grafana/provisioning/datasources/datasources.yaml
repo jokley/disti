@@ -1,7 +1,7 @@
 apiVersion: 1
 
 datasources:
-- name: InfluxDB_v2_Flux
+- name: InfluxDB_Flux
   type: influxdb
   access: proxy
   url: http://influxdb:8086
@@ -12,3 +12,18 @@ datasources:
     tlsSkipVerify: true  
   secureJsonData:
     token: ${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN}
+
+- name: Postgres
+  type: postgres
+  url: localhost:5432
+  database: postgres
+  user: ${DOCKER_POSTGRES_INIT_USERNAME}
+  secureJsonData:
+    password: ${DOCKER_POSTGRES_INIT_PASSWORD}
+  jsonData:
+    sslmode: "disable" # disable/require/verify-ca/verify-full
+    maxOpenConns: 10         # Grafana v5.4+
+    maxIdleConns: 2         # Grafana v5.4+
+    connMaxLifetime: 14400  # Grafana v5.4+
+    postgresVersion: 1540 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+    timescaledb: true
