@@ -31,5 +31,5 @@ COPY --from=BUILD_IMAGE /app/.next ./.next
 COPY --from=BUILD_IMAGE /app/public ./public
 
 
-EXPOSE 3000
+EXPOSE 3010
 CMD npm start
