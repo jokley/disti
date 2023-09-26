@@ -3,10 +3,10 @@ name: Docker Image CI
 on:
   push:
     paths:
-      - './frontend/**'
+      - 'frontend/**'
   pull_request:
     paths: 
-      - './frontend/**'
+      - 'frontend/**'
 #     branches: [ development, dev, qa, latest ]
 #   pull_request:
 #     branches: [ development, dev, qa, latest ]
