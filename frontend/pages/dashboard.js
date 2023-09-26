@@ -22,8 +22,6 @@ import Controls from "@components/controls/Controls";
 import moment from 'moment';
 // import { useWindowDimensions } from "../hooks/useWindowDimensions";
 
-
-
 /* const useStyles = makeStyles({
   root: {
     background: 'linear-gradient(45deg, #B9E4F5 30%, #72ADC4 90%)',
