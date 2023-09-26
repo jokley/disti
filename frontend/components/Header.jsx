@@ -53,7 +53,7 @@ const Header = () => {
             <IconButton  aria-label="home" sx={{paddingLeft: 3}}>
                 <MuiNextLink activeClassName="active" href="/"  >
                
-                  <Image src="/logo.png" alt="me" width="30" height="50" /> 
+                  <Image src="/next/logo.png" alt="me" width="30" height="50" /> 
                  
                 </MuiNextLink>
             </IconButton>
