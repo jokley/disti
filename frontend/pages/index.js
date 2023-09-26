@@ -22,7 +22,7 @@ export default function Home() {
   const addCar = async event => {
     event.preventDefault()
 
-    const res = await fetch('https://disti.pi.jokley.at/api/cars', {
+    const res = await fetch('https://disti.pi.jokley.at/backend/cars', {
       body: JSON.stringify({
         name: event.target.name.value,
         model:event.target.model.value,
@@ -47,7 +47,7 @@ export default function Home() {
 
     
 
-    const res = await fetch(`https://disti.pi.jokley.at/api/cars/${carId}`, {
+    const res = await fetch(`https://disti.pi.jokley.at/backend/cars/${carId}`, {
       body: JSON.stringify({
         name: 'test_name',
         model:'test_model',
@@ -70,7 +70,7 @@ export default function Home() {
 
     const carId = event.currentTarget.value
 
-    const res = await fetch(`https://disti.pi.jokley.at/api/cars/${carId}`, {
+    const res = await fetch(`https://disti.pi.jokley.at/backend/cars/${carId}`, {
       // body: JSON.stringify({
       //   name: event.target.name.value,
       //   model:event.target.model.value,
@@ -89,7 +89,7 @@ export default function Home() {
     
   }
 
-  const url = (`https://disti.pi.jokley.at/api/cars`);
+  const url = (`https://disti.pi.jokley.at/backend/cars`);
 
   const { data, error, mutate } = useSWR(url,{refreshInterval: 1000});
 
