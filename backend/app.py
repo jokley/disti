@@ -125,7 +125,14 @@ def handle_sensor():
 
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-        cur.execute('SELECT * FROM sensor where date between %s and %s order by date;',(VON, BIS))
+        #cur.execute('SELECT * FROM sensor where date between %s and %s order by date;',(VON, BIS))
+        cur.execute('''SELECT time_bucket('1 m', date) AS time,
+                        avg(temp),
+                        name
+                        FROM sensor
+                        where date between %s and %s
+                        GROUP BY time,name
+                        ORDER BY time;''',(VON, BIS))
         sensors = cur.fetchall()
         cur.close()
         conn.close()
