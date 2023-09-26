@@ -87,7 +87,6 @@ export default function App() {
 
   // const { width, height } = useWindowDimensions();
  
-  
   const url = (`https://disti.pi.jokley.at/backend/sensors?from=${timeStart}&to=${timeEnd}`);
 
    
