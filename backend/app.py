@@ -127,7 +127,7 @@ def handle_sensor():
         cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
         #cur.execute('SELECT * FROM sensor where date between %s and %s order by date;',(VON, BIS))
         cur.execute('''SELECT time_bucket('1 m', date) AS time,
-                        avg(temp),
+                        avg(temp) as temp,
                         name
                         FROM sensor
                         where date between %s and %s
