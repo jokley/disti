@@ -88,7 +88,7 @@ export default function App() {
   // const { width, height } = useWindowDimensions();
  
   
-  const url = (`https://disti.pi.jokley.at/api/sensors?from=${timeStart}&to=${timeEnd}`);
+  const url = (`https://disti.pi.jokley.at/backend/sensors?from=${timeStart}&to=${timeEnd}`);
 
    
   const { data, error } = useSWR(url,{refreshInterval: 1000});
