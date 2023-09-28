@@ -1,11 +1,10 @@
 Flask
 Flask-Cors
 gunicorn
-flask_sqlalchemy
-flask_marshmallow
 flask_mqtt
-marshmallow_sqlalchemy 
 psycopg2-binary
 datetime
 pytz
 python-dotenv
+Jinja2
+Werkzeug
