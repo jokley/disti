@@ -152,7 +152,7 @@ def create():
             conn.commit()
             cur.close()
             conn.close()
-            return redirect(url_for('index'))
+            return redirect(url_for('index',_external=True))
 
     return render_template('create.html')
 
@@ -174,7 +174,7 @@ def edit(id):
             conn.commit()
             cur.close()
             conn.close()
-            return redirect(url_for('index'))
+            return redirect(url_for('index',_external=True))
 
     return render_template('edit.html', post=post)
 
@@ -189,7 +189,7 @@ def delete(id):
     cur.close()
     conn.close()
     flash('"{}" was successfully deleted!'.format(post['title']))
-    return redirect(url_for('index'))
+    return redirect(url_for('index',_external=True))
 
 
 
