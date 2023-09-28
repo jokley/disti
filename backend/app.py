@@ -1,4 +1,4 @@
-from flask import Flask, json,jsonify,render_template, request, url_for, flash, redirect
+from flask import Flask, json,jsonify,render_template, request, url_for, flash, redirect,Blueprint
 from werkzeug.exceptions import abort
 from datetime import datetime
 import pytz
@@ -64,6 +64,8 @@ app.secret_key = 'hi'
 
 mqtt = Mqtt(app)
 
+bp = Blueprint('burritos', __name__,
+                        template_folder='templates')
 
 mqtt.subscribe("sensors/#")
   
@@ -120,8 +122,7 @@ def handle_connect(client, userdata, flags, rc):
 # def handle_logging(client, userdata, level, buf):
 #      app.logger.info(level, buf)
 
-bp = Blueprint('burritos', __name__,
-                        template_folder='templates')
+
 
 @app.route('/')
 def index():
@@ -140,7 +141,7 @@ def post(post_id):
     return render_template('post.html', post=post)
 
 
-@app.route('/create', methods=('GET', 'POST'))
+@bp.route('/create', methods=('GET', 'POST'))
 def create():
     if request.method == 'POST':
         title = request.form['title']

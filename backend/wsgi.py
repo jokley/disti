@@ -1,6 +1,6 @@
 from app import app
 import logging
-from flask import Blueprint
+#from flask_mqtt import Mqtt
 
 
 
@@ -9,8 +9,7 @@ if __name__ != '__main__':
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
     
-    bp = Blueprint('burritos', __name__,
-                        template_folder='templates')
+    #mqtt = Mqtt(app)
     
 
 if __name__ == "__main__":
