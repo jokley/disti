@@ -51,7 +51,7 @@ def get_post(post_id):
 app = Flask(__name__)
 CORS(app)
 
-
+app.config['APPLICATION_ROOT'] = '/backend'
 app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_USERNAME'] = os.getenv("DOCKER_MQTT_INIT_USERNAME")
