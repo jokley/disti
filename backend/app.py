@@ -1,7 +1,5 @@
 from flask import Flask, json,jsonify,render_template, request, url_for, flash, redirect
 from werkzeug.exceptions import abort
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from werkzeug.wrappers import Response
 from datetime import datetime
 import pytz
 import psycopg2
@@ -62,11 +60,6 @@ app.config['MQTT_KEEPALIVE'] = 10
 app.config['MQTT_CLIENT_ID']= 'jokley_flask_mqtt'
 
 app.secret_key = 'hi'
-
-app.wsgi_app = DispatcherMiddleware(
-    Response('Not Found', status=404),
-    {'/backend': app.wsgi_app}
-)
 
 mqtt = Mqtt(app)
 
@@ -144,7 +137,7 @@ def post(post_id):
     return render_template('post.html', post=post)
 
 
-@app.route('/create', methods=('GET', 'POST'))
+@app.route('/backend/create', methods=('GET', 'POST'))
 def create():
     if request.method == 'POST':
         title = request.form['title']
