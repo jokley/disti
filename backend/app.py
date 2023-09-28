@@ -51,7 +51,7 @@ def get_post(post_id):
 app = Flask(__name__)
 CORS(app)
 
-app.config['APPLICATION_ROOT'] = '/backend'
+
 app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_USERNAME'] = os.getenv("DOCKER_MQTT_INIT_USERNAME")
@@ -152,7 +152,7 @@ def create():
             conn.commit()
             cur.close()
             conn.close()
-            return redirect(url_for('index',_external=True))
+            return redirect(url_for('index'))
 
     return render_template('create.html')
 
@@ -174,7 +174,7 @@ def edit(id):
             conn.commit()
             cur.close()
             conn.close()
-            return redirect(url_for('index',_external=True))
+            return redirect(url_for('index'))
 
     return render_template('edit.html', post=post)
 
@@ -189,7 +189,7 @@ def delete(id):
     cur.close()
     conn.close()
     flash('"{}" was successfully deleted!'.format(post['title']))
-    return redirect(url_for('index',_external=True))
+    return redirect(url_for('index'))
 
 
 
