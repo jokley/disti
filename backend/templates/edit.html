@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block extrahead %}
+  <link href="https://netdna.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.js"></script>
+    <script src="https://netdna.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+
+    <!-- include summernote css/js-->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.2/summernote.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.2/summernote.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/angular-summernote/0.8.1/angular-summernote.js"></script>
+{% endblock %}
+{% block content %}
+  
+<h1>{% block title %} Edit "{{ post['title'] }}" {% endblock %}</h1>
+
+<form method="post">
+    <div class="form-group">
+        <label for="title">Title</label>
+        <input type="text" name="title" placeholder="Post title"
+               class="form-control"
+               value="{{ request.form['title'] or post['title'] }}">
+        </input>
+    </div>
+
+    <div class="form-group">
+        <label for="content">Content</label>
+        <textarea name="content" id="summernote" placeholder="Post content" 
+                   class="form-control">{{ request.form['content'] or post['content'] }}</textarea>
+    </div>
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </div>
+</form>
+<hr>
+
+<form action="{{ url_for('delete', id=post['id']) }}" method="POST">
+    <input type="submit" value="Delete Post"
+            class="btn btn-danger btn-sm"
+            onclick="return confirm('Are you sure you want to delete this post?')">
+</form>
+<script>
+$('textarea#summernote').summernote({
+        placeholder: 'Post content',
+        tabsize: 2,
+        height: 100,
+  toolbar: [
+        ['style', ['style']],
+        ['font', ['bold', 'italic', 'underline', 'clear']],
+        ['fontname', ['fontname']],
+        ['fontsize', ['fontsize']],
+        ['color', ['color']],
+        ['para', ['ul', 'ol', 'paragraph']],
+        ['height', ['height']],
+        ['table', ['table']],
+        ['insert', ['link', 'picture', 'hr']],
+        ['view', ['fullscreen', 'codeview']],
+        ['help', ['help']]
+      ],
+      });
+</script>
+{% endblock %}
