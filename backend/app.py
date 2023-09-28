@@ -51,6 +51,7 @@ def get_post(post_id):
 app = Flask(__name__)
 CORS(app)
 
+app.register_blueprint(bp, url_prefix='/backend')
 
 app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
@@ -119,6 +120,8 @@ def handle_connect(client, userdata, flags, rc):
 # def handle_logging(client, userdata, level, buf):
 #      app.logger.info(level, buf)
 
+bp = Blueprint('burritos', __name__,
+                        template_folder='templates')
 
 @app.route('/')
 def index():
@@ -131,13 +134,13 @@ def index():
     return render_template('index.html', posts=posts)
 
 
-@app.route('/<int:post_id>')
+@bp.route('/<int:post_id>')
 def post(post_id):
     post = get_post(post_id)
     return render_template('post.html', post=post)
 
 
-@app.route('/backend/create', methods=('GET', 'POST'))
+@app.route('/create', methods=('GET', 'POST'))
 def create():
     if request.method == 'POST':
         title = request.form['title']
