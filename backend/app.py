@@ -1,4 +1,4 @@
-from flask import Flask, json,jsonify,render_template, request, url_for, flash, redirect,Blueprint
+from flask import Flask, json,jsonify,render_template, request, url_for, flash, redirect
 from werkzeug.exceptions import abort
 from datetime import datetime
 import pytz
@@ -51,7 +51,6 @@ def get_post(post_id):
 app = Flask(__name__)
 CORS(app)
 
-app.register_blueprint(bp, url_prefix='/backend')
 
 app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
@@ -64,8 +63,6 @@ app.secret_key = 'hi'
 
 mqtt = Mqtt(app)
 
-bp = Blueprint('burritos', __name__,
-                        template_folder='templates')
 
 mqtt.subscribe("sensors/#")
   
@@ -123,7 +120,6 @@ def handle_connect(client, userdata, flags, rc):
 #      app.logger.info(level, buf)
 
 
-
 @app.route('/')
 def index():
     conn = get_db_connection()
@@ -135,13 +131,13 @@ def index():
     return render_template('index.html', posts=posts)
 
 
-@bp.route('/<int:post_id>')
+@app.route('/<int:post_id>')
 def post(post_id):
     post = get_post(post_id)
     return render_template('post.html', post=post)
 
 
-@bp.route('/create', methods=('GET', 'POST'))
+@app.route('/create', methods=('GET', 'POST'))
 def create():
     if request.method == 'POST':
         title = request.form['title']
