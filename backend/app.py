@@ -120,7 +120,7 @@ def handle_connect(client, userdata, flags, rc):
 #      app.logger.info(level, buf)
 
 
-@app.route('/')
+@app.route('/backend/')
 def index():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
@@ -131,13 +131,13 @@ def index():
     return render_template('index.html', posts=posts)
 
 
-@app.route('/<int:post_id>')
+@app.route('/backend/<int:post_id>')
 def post(post_id):
     post = get_post(post_id)
     return render_template('post.html', post=post)
 
 
-@app.route('/create', methods=('GET', 'POST'))
+@app.route('/backend/create', methods=('GET', 'POST'))
 def create():
     if request.method == 'POST':
         title = request.form['title']
@@ -157,7 +157,7 @@ def create():
     return render_template('create.html')
 
 
-@app.route('/<int:id>/edit', methods=('GET', 'POST'))
+@app.route('/backend/<int:id>/edit', methods=('GET', 'POST'))
 def edit(id):
     post = get_post(id)
 
@@ -179,7 +179,7 @@ def edit(id):
     return render_template('edit.html', post=post)
 
 
-@app.route('/<int:id>/delete', methods=('POST',))
+@app.route('/backend/<int:id>/delete', methods=('POST',))
 def delete(id):
     post = get_post(id)
     conn = get_db_connection()
