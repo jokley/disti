@@ -1,5 +1,6 @@
 from flask import Flask, json,jsonify,render_template, request, url_for, flash, redirect
 from werkzeug.exceptions import abort
+from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime
 import pytz
 import psycopg2
@@ -46,11 +47,12 @@ def get_post(post_id):
 
 
 
-
-
 app = Flask(__name__)
 CORS(app)
 
+app.wsgi_app = ProxyFix(
+    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+)
 
 app.config['MQTT_BROKER_URL'] = "172.16.238.12"
 app.config['MQTT_BROKER_PORT'] = 1883
