@@ -1,0 +1,7 @@
+# Opt-in overlay: docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d
+services:
+  hardware-agent:
+    devices:
+      - /dev/i2c-1:/dev/i2c-1
+    environment:
+      DISTI_HARDWARE_MODE: raspberry

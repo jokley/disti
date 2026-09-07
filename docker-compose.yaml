@@ -33,7 +33,7 @@ services:
         ipv4_address: 172.16.238.12
         
   backend:
-    image: flask
+    image: disti-backend
     container_name: flask-backend
     build:
       context: ./backend
@@ -44,16 +44,43 @@ services:
     ports:
       - "5000:5000"
     env_file:
-      - disti.env
+      - ${DISTI_ENV_FILE:-disti.env}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       example-network:
         ipv4_address: 172.16.238.13
+
+  hardware-agent:
+    image: disti-backend
+    build:
+      context: ./backend
+    command: ["python", "hardware_agent.py"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_started
+    env_file:
+      - ${DISTI_ENV_FILE:-disti.env}
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      example-network:
+        ipv4_address: 172.16.238.19
 
   frontend:
     # image: nextjs
     image: jokley/disti-nextjs
     container_name: next-frontend
-    privileged: true
+    # Hardware access belongs exclusively to hardware-agent in raspberry mode.
     #build:
       #context: ./frontend
     restart: unless-stopped
@@ -97,7 +124,7 @@ services:
     image: grafana/grafana:9.2.3
     restart: unless-stopped
     env_file:
-      - disti.env
+      - ${DISTI_ENV_FILE:-disti.env}
     # depends_on:
     #   - influxdb
     ports:
