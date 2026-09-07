@@ -1,289 +1,137 @@
-from flask import Flask, json,jsonify,render_template, request, url_for, flash, redirect
-from werkzeug.exceptions import abort
-from werkzeug.middleware.proxy_fix import ProxyFix
-from datetime import datetime
-import pytz
-import psycopg2
-import psycopg2.extras
-from flask_cors import CORS
-from flask_mqtt import Mqtt
-from dotenv import load_dotenv
-import sys
+"""DISTI Flask application.
+
+The web process exposes control APIs only. Continuous acquisition lives in
+``hardware_agent.py`` so restarting gunicorn never interrupts measurements.
+"""
+from datetime import datetime, timezone
 import os
+import json as json_module
+from urllib.request import urlopen
 
-load_dotenv()
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-
-def get_timestamp_now():
-    TIMESTAMP_NOW = datetime.now().astimezone(pytz.timezone("Europe/Berlin")).isoformat()
-    return TIMESTAMP_NOW
-
-def get_timestamp_now_offset():
-    TIMESTAMP_NOW_OFFSET = pytz.timezone("Europe/Berlin").utcoffset(datetime.now()).total_seconds()
-    return TIMESTAMP_NOW_OFFSET
-
-def get_timestamp_now_epoche():
-    TIMESTAMP_NOW_EPOCHE = int(datetime.now().timestamp()+get_timestamp_now_offset())
-    return TIMESTAMP_NOW_EPOCHE 
-
-def get_db_connection():
-    conn = psycopg2.connect(host='postgres',
-                            database='postgres',
-                            user=os.getenv("DOCKER_POSTGRES_INIT_USERNAME"),
-                            password=os.getenv("DOCKER_POSTGRES_INIT_PASSWORD"))
-    return conn
-
-       
-def get_post(post_id):
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-    cur.execute('SELECT * FROM posts WHERE id = %s;',(post_id,))
-    post = cur.fetchone()
-    cur.close()
-    conn.close()
-    if post is None:
-        abort(404)
-    return post
+from disti.repository import Repository
 
 
-
-app = Flask(__name__)
-CORS(app)
-
-app.wsgi_app = ProxyFix(
-    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
-)
-
-app.config['MQTT_BROKER_URL'] = "172.16.238.12"
-app.config['MQTT_BROKER_PORT'] = 1883
-app.config['MQTT_USERNAME'] = os.getenv("DOCKER_MQTT_INIT_USERNAME")
-app.config['MQTT_PASSWORD'] = os.getenv("DOCKER_MQTT_INIT_PASSWORD")
-app.config['MQTT_KEEPALIVE'] = 10
-app.config['MQTT_CLIENT_ID']= 'jokley_flask_mqtt'
-
-app.secret_key = 'hi'
-
-mqtt = Mqtt(app)
+def _json(row):
+    if row is None:
+        return None
+    return {key: value.isoformat() if isinstance(value, datetime) else value for key, value in row.items()}
 
 
-mqtt.subscribe("sensors/#")
-  
-@mqtt.on_message()
-def handle_message(client, userdata, message):
-#    if message.topic == "sensors/#":
-      
-    data = json.loads(message.payload.decode())
-    app.logger.info(data)
-    sName = data['name']
-    sType = data['type']
+def create_app(repository=None):
+    app = Flask(__name__)
+    CORS(app)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+    repo = repository or Repository.from_environment()
+    app.extensions["disti_repository"] = repo
 
-    if data['type'] == "ds18b20":
-        sTemp = data['temp']
-        sHumi = 0
-    elif data['type'] == "si7021":
-        sTemp = data['temp']
-        sHumi = data['humi']
-       
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('INSERT INTO sensor (name, type, temp, humi)'
-                'VALUES (%s, %s, %s, %s)',
-                (sName, sType, sTemp, sHumi))
-    conn.commit()
-    cur.close()
-    conn.close()
+    @app.get("/")
+    def index():
+        return jsonify(service="disti-backend", status="ok")
 
+    @app.get("/health")
+    def health():
+        return jsonify(service="backend", status="healthy", database=repo.ping())
 
-@mqtt.on_connect()
-def handle_connect(client, userdata, flags, rc):
-      mqtt.subscribe("sensors/#")
-      app.logger.info('on_connect client : {} userdata :{} flags :{} rc:{}'.format(client, userdata, flags, rc))
-      app.logger.info("connected")
-      app.logger.info("topic subscribed sensors/#")
-        
+    @app.get("/healthz")
+    def healthz():
+        return jsonify(status="ok")
 
-# @mqtt.on_subscribe()
-# def handle_subscribe(client, userdata, mid, granted_qos):
-#     print('on_subscribe client : {} userdata :{} mid :{} granted_qos:{}'.format(client, userdata, mid, granted_qos))
+    @app.get("/watchdog/status")
+    def watchdog_status():
+        threshold = float(os.getenv("DISTI_HARDWARE_MAX_AGE_SEC", "30"))
+        result = {"status": "ok", "database": {"healthy": False},
+                  "hardware_agent": {"healthy": False}, "measurement_freshness": None, "reason": None}
+        try:
+            repo.ping()
+            result["database"] = {"healthy": True}
+            freshness = repo.measurement_freshness()
+            freshness["threshold_seconds"] = threshold
+            result["measurement_freshness"] = freshness
+        except Exception as exc:
+            result.update(status="degraded", reason=f"database: {exc}")
+        try:
+            with urlopen(os.getenv("DISTI_HARDWARE_HEALTH_URL", "http://hardware-agent:8081"), timeout=5) as response:
+                agent = json_module.load(response)
+            agent["healthy"] = agent.get("status") in ("healthy", "replay-complete")
+            result["hardware_agent"] = agent
+            age = result["measurement_freshness"] and result["measurement_freshness"]["youngest_age_seconds"]
+            if not agent["healthy"] or (age is not None and age > threshold):
+                result.update(status="degraded", reason="hardware-agent unhealthy or measurements stale")
+        except Exception as exc:
+            result.update(status="degraded", reason=f"hardware-agent: {exc}")
+        return jsonify(result), 200
 
+    @app.get("/api/sensors")
+    def sensors():
+        return jsonify([_json(row) for row in repo.list_sensors()])
 
-# @mqtt.on_message()
-# def handle_message(client, userdata, message):
-#     print('on_message client : {} userdata :{} message.topic :{} message.payload :{}'.format(
-#     	client, userdata, message.topic, message.payload.decode()))
+    @app.get("/api/sensors/<sensor_id>")
+    def sensor(sensor_id):
+        row = repo.get_sensor(sensor_id)
+        return (jsonify(_json(row)), 200) if row else (jsonify(error="sensor not found"), 404)
 
-# @mqtt.on_disconnect()
-# def handle_disconnect(client, userdata, rc):
-#     print('on_disconnect client : {} userdata :{} rc :{}'.format(client, userdata, rc))
-    
+    @app.get("/api/sensors/<sensor_id>/calibration")
+    def calibrations(sensor_id):
+        return jsonify([_json(row) for row in repo.list_calibrations(sensor_id)])
 
-# @mqtt.on_log()
-# def handle_logging(client, userdata, level, buf):
-#      app.logger.info(level, buf)
+    @app.post("/api/sensors/<sensor_id>/calibration/start")
+    def calibration_start(sensor_id):
+        row = repo.start_calibration(sensor_id, (request.get_json(silent=True) or {}).get("model", "linear"))
+        return jsonify(_json(row)), 201
 
+    @app.post("/api/sensors/<sensor_id>/calibration/point")
+    def calibration_point(sensor_id):
+        data = request.get_json(force=True)
+        row = repo.add_calibration_point(sensor_id, data["calibration_id"], data)
+        return jsonify(_json(row)), 201
 
-@app.route('/')
-def index():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-    cur.execute('SELECT * FROM posts;')
-    posts = cur.fetchall()
-    cur.close()
-    conn.close()
-    return render_template('index.html', posts=posts)
+    @app.post("/api/sensors/<sensor_id>/calibration/save")
+    def calibration_save(sensor_id):
+        data = request.get_json(force=True)
+        row = repo.save_calibration(sensor_id, data["calibration_id"], data, data.get("activate", True))
+        return jsonify(_json(row))
 
+    @app.post("/api/runs")
+    def start_run():
+        return jsonify(_json(repo.start_run(request.get_json(silent=True) or {}))), 201
 
-@app.route('/<int:post_id>')
-def post(post_id):
-    post = get_post(post_id)
-    return render_template('post.html', post=post)
+    @app.get("/api/runs/active")
+    def active_run():
+        row = repo.active_run()
+        return (jsonify(_json(row)), 200) if row else (jsonify(error="no active run"), 404)
 
+    @app.post("/api/runs/<run_id>/stop")
+    def stop_run(run_id):
+        return jsonify(_json(repo.stop_run(run_id)))
 
-@app.route('/create', methods=('GET', 'POST'))
-def create():
-    if request.method == 'POST':
-        title = request.form['title']
-        content = request.form['content']
+    @app.post("/api/runs/<run_id>/fractions/start")
+    def fraction_start(run_id):
+        return jsonify(_json(repo.start_fraction(run_id, request.get_json(silent=True) or {}))), 201
 
-        if not title:
-            flash('Title is required!')
-        else:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute('INSERT INTO posts (title, content) VALUES (%s, %s);',(title, content))
-            conn.commit()
-            cur.close()
-            conn.close()
-            return redirect(url_for('index'))
+    @app.post("/api/runs/<run_id>/fractions/<fraction_id>/end")
+    def fraction_end(run_id, fraction_id):
+        return jsonify(_json(repo.end_fraction(run_id, fraction_id)))
 
-    return render_template('create.html')
+    @app.post("/api/runs/<run_id>/cuts")
+    def manual_cut(run_id):
+        data = request.get_json(silent=True) or {}
+        return jsonify(_json(repo.record_event("manual_cut", data, run_id=run_id))), 201
 
+    @app.get("/api/version")
+    def version():
+        return jsonify(version=os.getenv("DISTI_VERSION", "development"),
+                       build=os.getenv("DISTI_BUILD", "local"),
+                       update_channel=os.getenv("DISTI_UPDATE_BRANCH", "dev"))
 
-@app.route('/<int:id>/edit', methods=('GET', 'POST'))
-def edit(id):
-    post = get_post(id)
-
-    if request.method == 'POST':
-        title = request.form['title']
-        content = request.form['content']
-
-        if not title:
-            flash('Title is required!')
-        else:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute('UPDATE posts SET title = %s, content = %s WHERE id = %s;',(title, content, id))
-            conn.commit()
-            cur.close()
-            conn.close()
-            return redirect(url_for('index'))
-
-    return render_template('edit.html', post=post)
+    return app
 
 
-@app.route('/<int:id>/delete', methods=('POST',))
-def delete(id):
-    post = get_post(id)
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute('DELETE FROM posts WHERE id = %s;', (id,))
-    conn.commit()
-    cur.close()
-    conn.close()
-    flash('"{}" was successfully deleted!'.format(post['title']))
-    return redirect(url_for('index'))
+app = create_app()
 
 
-
-
-@app.route('/time')
-def time():
-    return jsonify(get_timestamp_now_epoche(),get_timestamp_now(),get_timestamp_now_offset())
-
-
-@app.route('/sensors', methods=['GET'])
-def handle_sensor():
-        
-        FROM =request.args.get('from', default = get_timestamp_now_epoche()-36000, type = int)
-        TO = request.args.get('to', default = get_timestamp_now_epoche(), type = int)
-
-        VON = datetime.fromtimestamp(int(FROM)).isoformat()
-        BIS = datetime.fromtimestamp(int(TO)).isoformat()  
-
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-        cur.execute('SELECT * FROM sensor where date between %s and %s order by date;',(VON, BIS))
-        # cur.execute('''SELECT time_bucket('1 m', date) AS time,
-        #                 avg(temp) as temp,
-        #                 name
-        #                 FROM sensor
-        #                 where date between %s and %s
-        #                 GROUP BY time,name
-        #                 ORDER BY time;''',(VON, BIS))
-        sensors = cur.fetchall()
-        cur.close()
-        conn.close()
-        return jsonify(sensors)
-
-
-@app.route('/cars', methods=['GET'])
-def handle_cars():
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-        cur.execute('SELECT * FROM cars;')
-        cars = cur.fetchall()
-        cur.close()
-        conn.close()
-        return jsonify(cars)
-    
-
-
-# @app.route('/cars', methods=['POST', 'GET'])
-# def handle_cars():
-#     if request.method == 'POST':
-#         if request.is_json:
-#             data = request.get_json()
-#             new_car = CarsModel(name=data['name'], model=data['model'], doors=data['doors'])
-#             db.session.add(new_car)
-#             db.session.commit()
-#             return {"message": f"car {new_car.name} has been created successfully."}
-#         else:
-#             return {"error": "The request payload is not in JSON format"}
-
-#     elif request.method == 'GET':
-#         all_cars = CarsModel.query.all()
-#         # results = [
-#         #     {
-#         #         "name": car.name,
-#         #         "model": car.model,
-#         #         "doors": car.doors
-#         #     } for car in cars]
-
-#         return jsonify(cars_schema.dump(all_cars))
-
-
-# @app.route('/cars/<car_id>', methods=['GET', 'PUT', 'DELETE'])
-# def handle_car(car_id):
-#     car = CarsModel.query.get_or_404(car_id)
-
-#     if request.method == 'GET':
-#         response = {
-#             "name": car.name,
-#             "model": car.model,
-#             "doors": car.doors
-#         }
-#         return {"message": "success", "car": response}
-
-#     elif request.method == 'PUT':
-#         data = request.get_json()
-#         car.name = data['name']
-#         car.model = data['model']
-#         car.doors = data['doors']
-#         db.session.add(car)
-#         db.session.commit()
-#         return {"message": f"car {car.name} successfully updated"}
-
-#     elif request.method == 'DELETE':
-#         db.session.delete(car)
-#         db.session.commit()
-#         return {"message": f"Car {car.name} successfully deleted."}
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)

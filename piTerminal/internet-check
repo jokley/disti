@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+source /etc/disti-internet-check.conf
+ping -c1 -W5 "$PING_TARGET" >/dev/null&&exit 0
+for dev in /sys/bus/usb/devices/*;do [[ -r $dev/idVendor && -r $dev/idProduct ]]||continue
+  [[ $(<$dev/idVendor) == "$USB_VENDOR_ID" && $(<$dev/idProduct) == "$USB_PRODUCT_ID" ]]||continue
+  id=${dev##*/};echo -n "$id" > /sys/bus/usb/drivers/usb/unbind;sleep 2;echo -n "$id" >/sys/bus/usb/drivers/usb/bind;sleep "$RECOVERY_WAIT_SEC";systemctl restart "$WIREGUARD_UNIT";exit 0
+done
+echo 'Configured USB modem not found' >&2;exit 1

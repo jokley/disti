@@ -1,0 +1,6 @@
+[Unit]
+Description=DISTI optional USB modem recovery
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/disti-internet-check
