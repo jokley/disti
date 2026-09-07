@@ -6,3 +6,8 @@ password.txt
 __pycache__/
 .pytest_cache/
 *.pyc
+.disti-local/
+piTerminal/client-configs/*
+!piTerminal/client-configs/.gitkeep
+*-wg0.conf
+*.conf.local

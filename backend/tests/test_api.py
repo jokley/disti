@@ -1,4 +1,5 @@
 from app import create_app
+import app as app_module
 
 
 def test_calibration_history_and_active_selection(repo):
@@ -13,6 +14,37 @@ def test_calibration_history_and_active_selection(repo):
     history = client.get("/api/sensors/ec-1/calibration").get_json()
     assert saved["active"] == 1
     assert sum(bool(item["active"]) for item in history) == 1
+
+
+def test_finalized_calibration_data_is_immutable(repo):
+    repo.ensure_sensor("ec-1", "EC", "ec")
+    calibration = repo.start_calibration("ec-1", "linear")
+    repo.add_calibration_point("ec-1", calibration["id"], {"raw_mv": 700, "reference_value": 1.413})
+    repo.save_calibration("ec-1", calibration["id"], {"slope": 0.002, "offset": 0.1})
+    try:
+        repo.add_calibration_point("ec-1", calibration["id"], {"raw_mv": 800})
+        assert False, "finalized calibration accepted a new point"
+    except ValueError:
+        pass
+
+
+def test_backend_health_checks_database(repo):
+    response = create_app(repo).test_client().get("/health")
+    assert response.status_code == 200
+    assert response.get_json() == {"database": "ok", "service": "backend", "status": "healthy"}
+    assert create_app(repo).test_client().get("/healthz").get_json() == {"status": "ok"}
+
+
+def test_watchdog_status_reports_database_and_hardware(repo, monkeypatch):
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def read(self): return b'{"status":"healthy","last_read_at":1}'
+    monkeypatch.setattr(app_module, "urlopen", lambda *args, **kwargs: Response())
+    payload = create_app(repo).test_client().get("/watchdog/status").get_json()
+    assert payload["database"]["healthy"] is True
+    assert payload["hardware_agent"]["healthy"] is True
+    assert payload["status"] == "ok"
 
 
 def test_run_and_fraction_lifecycle(repo):

@@ -1,7 +1,9 @@
-from datetime import datetime, timezone
+import json
+from threading import Thread
+from urllib.request import urlopen
 
 from disti.hardware import MockFractionCollector, MockSensorReader, ReplaySensorReader
-from hardware_agent import Agent
+from hardware_agent import Agent, make_health_server
 
 
 def test_mock_data_is_deterministic_and_keeps_ec_raw_values():
@@ -31,6 +33,17 @@ def test_agent_restart_appends_to_active_run(repo):
     rows = repo.replay_measurements(run["id"])
     assert len(rows) == 4
     assert all(row["run_id"] == run["id"] for row in rows)
+
+
+def test_mock_agent_health_endpoint(repo):
+    agent = Agent(repo, MockSensorReader(lambda: 0), interval=1)
+    agent.poll_once()
+    server = make_health_server(agent, 0)
+    thread = Thread(target=server.handle_request)
+    thread.start()
+    payload = json.load(urlopen(f"http://127.0.0.1:{server.server_port}", timeout=2))
+    thread.join(timeout=2); server.server_close()
+    assert payload["status"] == "healthy"
 
 
 def test_fraction_collector_persists_actuator_event(repo):

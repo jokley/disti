@@ -54,6 +54,19 @@ class Repository:
         self._execute("SELECT 1", fetch="one")
         return "ok"
 
+    def measurement_freshness(self):
+        row = self._execute("SELECT COUNT(*) AS sensor_count, MAX(time) AS newest_time, MIN(time) AS oldest_time FROM sensor_measurements", fetch="one")
+        current = now()
+        def age(value):
+            if value is None:
+                return None
+            parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return max(0, (current - parsed).total_seconds())
+        return {"sensor_count": row["sensor_count"], "youngest_age_seconds": age(row["newest_time"]),
+                "oldest_age_seconds": age(row["oldest_time"])}
+
     def list_sensors(self): return self._execute("SELECT * FROM sensors ORDER BY name")
     def get_sensor(self, sensor_id): return self._execute("SELECT * FROM sensors WHERE id=%s", (sensor_id,), "one")
     def ensure_sensor(self, sensor_id, name, kind):
@@ -75,16 +88,28 @@ class Repository:
     def add_calibration_point(self, sensor_id, calibration_id, point):
         calibration = self._execute("SELECT * FROM sensor_calibrations WHERE id=%s AND sensor_id=%s", (calibration_id, sensor_id), "one")
         if not calibration: raise ValueError("calibration not found")
+        if calibration.get("finalized_at"):
+            raise ValueError("finalized calibrations are immutable")
         points = calibration["points"] if isinstance(calibration["points"], list) else json.loads(calibration["points"])
         points.append({key: point.get(key) for key in ("raw_value", "raw_mv", "reference_value", "solution_temperature", "timestamp")})
         self._execute("UPDATE sensor_calibrations SET points=%s WHERE id=%s", (json.dumps(points), calibration_id), fetch=None)
         return self._execute("SELECT * FROM sensor_calibrations WHERE id=%s", (calibration_id,), "one")
 
     def save_calibration(self, sensor_id, calibration_id, data, activate=True):
+        calibration = self._execute("SELECT * FROM sensor_calibrations WHERE id=%s AND sensor_id=%s", (calibration_id, sensor_id), "one")
+        if not calibration:
+            raise ValueError("calibration not found")
+        finalized = calibration.get("finalized_at")
+        if finalized and (data.get("slope", calibration.get("slope")) != calibration.get("slope") or
+                          data.get("offset", calibration.get("offset")) != calibration.get("offset")):
+            raise ValueError("finalized calibration coefficients are immutable")
         if activate:
             self._execute("UPDATE sensor_calibrations SET active=%s WHERE sensor_id=%s", (False, sensor_id), fetch=None)
-        self._execute("UPDATE sensor_calibrations SET slope=%s, offset=%s, active=%s WHERE id=%s AND sensor_id=%s",
-                      (data.get("slope"), data.get("offset"), activate, calibration_id, sensor_id), fetch=None)
+        if not finalized:
+            self._execute("UPDATE sensor_calibrations SET slope=%s, offset=%s, finalized_at=%s WHERE id=%s",
+                          (data.get("slope"), data.get("offset"), now().isoformat(), calibration_id), fetch=None)
+        self._execute("UPDATE sensor_calibrations SET active=%s, activated_at=%s WHERE id=%s",
+                      (activate, now().isoformat() if activate else None, calibration_id), fetch=None)
         return self._execute("SELECT * FROM sensor_calibrations WHERE id=%s", (calibration_id,), "one")
 
     def active_run(self): return self._execute("SELECT * FROM distillation_runs WHERE status='active' ORDER BY started_at DESC LIMIT 1", fetch="one")
@@ -115,8 +140,8 @@ class Repository:
         return mid
     def replay_measurements(self, run_id):
         return self._execute("SELECT * FROM sensor_measurements WHERE run_id=%s ORDER BY time", (run_id,))
-    def record_event(self, event_type, details, run_id=None, actuator_id=None):
-        eid = str(uuid4())
+    def record_event(self, event_type, details, run_id=None, actuator_id=None, timestamp=None, event_id=None):
+        eid = event_id or str(uuid4())
         self._execute("INSERT INTO actuator_events(id,time,run_id,actuator_id,event_type,status,details) VALUES(%s,%s,%s,%s,%s,'completed',%s)",
-                      (eid, now().isoformat(), run_id, actuator_id, event_type, json.dumps(details)), fetch=None)
+                      (eid, (timestamp or now()).isoformat(), run_id, actuator_id, event_type, json.dumps(details)), fetch=None)
         return self._execute("SELECT * FROM actuator_events WHERE id=%s", (eid,), "one")

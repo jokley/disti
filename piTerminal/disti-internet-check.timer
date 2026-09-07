@@ -1,0 +1,9 @@
+[Unit]
+Description=Periodically validate DISTI client internet
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+[Install]
+WantedBy=timers.target

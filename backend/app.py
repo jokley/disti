@@ -5,6 +5,8 @@ The web process exposes control APIs only. Continuous acquisition lives in
 """
 from datetime import datetime, timezone
 import os
+import json as json_module
+from urllib.request import urlopen
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -33,6 +35,35 @@ def create_app(repository=None):
     @app.get("/health")
     def health():
         return jsonify(service="backend", status="healthy", database=repo.ping())
+
+    @app.get("/healthz")
+    def healthz():
+        return jsonify(status="ok")
+
+    @app.get("/watchdog/status")
+    def watchdog_status():
+        threshold = float(os.getenv("DISTI_HARDWARE_MAX_AGE_SEC", "30"))
+        result = {"status": "ok", "database": {"healthy": False},
+                  "hardware_agent": {"healthy": False}, "measurement_freshness": None, "reason": None}
+        try:
+            repo.ping()
+            result["database"] = {"healthy": True}
+            freshness = repo.measurement_freshness()
+            freshness["threshold_seconds"] = threshold
+            result["measurement_freshness"] = freshness
+        except Exception as exc:
+            result.update(status="degraded", reason=f"database: {exc}")
+        try:
+            with urlopen(os.getenv("DISTI_HARDWARE_HEALTH_URL", "http://hardware-agent:8081"), timeout=5) as response:
+                agent = json_module.load(response)
+            agent["healthy"] = agent.get("status") in ("healthy", "replay-complete")
+            result["hardware_agent"] = agent
+            age = result["measurement_freshness"] and result["measurement_freshness"]["youngest_age_seconds"]
+            if not agent["healthy"] or (age is not None and age > threshold):
+                result.update(status="degraded", reason="hardware-agent unhealthy or measurements stale")
+        except Exception as exc:
+            result.update(status="degraded", reason=f"hardware-agent: {exc}")
+        return jsonify(result), 200
 
     @app.get("/api/sensors")
     def sensors():

@@ -47,14 +47,18 @@ class Agent:
             time.sleep(delay)
 
 
-def serve_health(agent):
+def make_health_server(agent, port=None):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             body = json.dumps(agent.status).encode()
             self.send_response(200 if agent.status["status"] in ("healthy", "replay-complete") else 503)
             self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(body)
         def log_message(self, *_): pass
-    ThreadingHTTPServer(("0.0.0.0", int(os.getenv("DISTI_HARDWARE_HEALTH_PORT", "8081"))), Handler).serve_forever()
+    return ThreadingHTTPServer(("0.0.0.0", int(port if port is not None else os.getenv("DISTI_HARDWARE_HEALTH_PORT", "8081"))), Handler)
+
+
+def serve_health(agent):
+    make_health_server(agent).serve_forever()
 
 
 if __name__ == "__main__":
