@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+CONFIG_FILE="${DISTI_UPDATE_CONFIG:-/etc/disti-update.conf}"
+LOCK_FILE="${DISTI_UPDATE_LOCK:-/run/lock/disti-update.lock}"
+log(){ printf '%s %s\n' "$(date --iso-8601=seconds)" "$*"; }
+fail(){ log "ERROR: $*" >&2; exit 1; }
+load_config(){
+  [[ -r "$CONFIG_FILE" ]] || fail "Configuration missing or unreadable: $CONFIG_FILE"
+  # shellcheck source=/dev/null
+  source "$CONFIG_FILE"
+  : "${DISTI_DIR:?DISTI_DIR missing}" "${DEPLOY_BRANCH:?DEPLOY_BRANCH missing}" "${COMPOSE_PROFILE:?COMPOSE_PROFILE missing}" "${HEALTH_URL:?HEALTH_URL missing}"
+  HEALTH_RETRIES="${HEALTH_RETRIES:-12}"; HEALTH_SLEEP_SEC="${HEALTH_SLEEP_SEC:-10}"; COMPOSE_WAIT_TIMEOUT_SEC="${COMPOSE_WAIT_TIMEOUT_SEC:-180}"
+  case "$DEPLOY_BRANCH" in qa|main);; *) fail "Unsupported DEPLOY_BRANCH: $DEPLOY_BRANCH (allowed: qa, main)";; esac
+  case "$COMPOSE_PROFILE" in base|raspberry);; *) fail "Unsupported COMPOSE_PROFILE: $COMPOSE_PROFILE";; esac
+  [[ "$HEALTH_RETRIES" =~ ^[0-9]+$ && "$HEALTH_SLEEP_SEC" =~ ^[0-9]+$ && "$COMPOSE_WAIT_TIMEOUT_SEC" =~ ^[0-9]+$ ]] || fail "Timeout and retry values must be integers"
+  export DISTI_ENV_FILE="${DISTI_ENV_FILE:-$DISTI_DIR/.disti-local/disti.env}"
+  export DISTI_MQTT_PASSWORD_FILE="${DISTI_MQTT_PASSWORD_FILE:-$DISTI_DIR/.disti-local/mosquitto-password.txt}"
+  export DISTI_NGINX_HTPASSWD_FILE="${DISTI_NGINX_HTPASSWD_FILE:-$DISTI_DIR/.disti-local/nginx.htpasswd}"
+}
+compose_args(){ COMPOSE_ARGS=(-f docker-compose.yaml); if [[ "$COMPOSE_PROFILE" == raspberry ]]; then COMPOSE_ARGS+=(-f docker-compose.raspberry.yaml); fi; }
+run_compose(){ docker compose "${COMPOSE_ARGS[@]}" "$@"; }
+wait_for_health(){ local attempt; for ((attempt=1;attempt<=HEALTH_RETRIES;attempt++)); do
+  if curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" >/dev/null; then log "Health check passed: $HEALTH_URL"; return 0; fi
+  log "Health check not ready ($attempt/$HEALTH_RETRIES)"; sleep "$HEALTH_SLEEP_SEC"; done; return 1; }
+rollback(){ log "Rolling back to $LOCAL_COMMIT"; git reset --hard "$LOCAL_COMMIT"
+  if run_compose config --quiet && run_compose up -d --build --remove-orphans --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT_SEC" && wait_for_health; then
+    log "Rollback completed: $LOCAL_COMMIT"; else log "CRITICAL: rollback failed: $LOCAL_COMMIT" >&2; fi; exit 1; }
+load_config
+exec 9>"$LOCK_FILE"; if ! flock -n 9; then log "Another rollout is running; exiting"; exit 0; fi
+cd "$DISTI_DIR"; git rev-parse --is-inside-work-tree >/dev/null || fail "$DISTI_DIR is not a Git repository"
+if ! git diff --quiet || ! git diff --cached --quiet; then fail "Tracked local changes found; rollout aborted"; fi
+compose_args
+log "Checking origin/$DEPLOY_BRANCH"
+git fetch --prune origin "+refs/heads/${DEPLOY_BRANCH}:refs/remotes/origin/${DEPLOY_BRANCH}"
+LOCAL_COMMIT="$(git rev-parse HEAD)"; REMOTE_COMMIT="$(git rev-parse "origin/$DEPLOY_BRANCH")"
+[[ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]] || { log "No update: $LOCAL_COMMIT"; exit 0; }
+log "Deploying $LOCAL_COMMIT -> $REMOTE_COMMIT"; git reset --hard "$REMOTE_COMMIT"
+run_compose config --quiet || rollback
+run_compose pull --ignore-buildable || rollback
+run_compose up -d --build --remove-orphans --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT_SEC" || rollback
+run_compose exec -T backend python migrate.py || rollback
+wait_for_health || rollback
+log "Rollout completed: $REMOTE_COMMIT"
