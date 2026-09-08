@@ -1,6 +1,6 @@
 # DISTI
 
-DISTI uses a Raspberry Pi controller, TimescaleDB, Flask, Next.js, Grafana,
+DISTI uses a Raspberry Pi controller, TimescaleDB, Flask, Grafana,
 Mosquitto and nginx. Local I2C acquisition is deliberately isolated in the
 `hardware-agent`; MQTT remains available for external modules and integrations,
 but is not in the local acquisition path.
@@ -33,7 +33,7 @@ operators must review changes to these paths before every update.
   `DISTI_REPLAY_PRESERVE_TIMING=false` to emit as quickly as possible.
 * **raspberry**: currently an intentional provider stub. Once drivers exist,
   start with the `docker-compose.raspberry.yaml` overlay. Only hardware-agent
-  receives `/dev/i2c-1`; neither the stack nor frontend is privileged.
+  receives `/dev/i2c-1`; the rest of the stack is not privileged.
 
 The agent's health endpoint is `http://controller:8081`; backend health is
 `/health`. Raw ADC counts and millivolts are always persisted alongside
@@ -75,7 +75,7 @@ for direct Grafana queries.
 ## Reference implementation note
 
 The VENTI technical handoff is the rollout and provisioning reference. DISTI
-preserves its TimescaleDB, hardware-agent, Next.js, and local-I2C architecture;
+preserves its TimescaleDB, hardware-agent, Grafana, and local-I2C architecture;
 it intentionally does not port ChirpStack, InfluxDB, Panstamp, or local-hardware
 MQTT coupling.
 
@@ -138,8 +138,8 @@ The kiosk is installed in the user's graphical session using labwc, LXDE, or
 XDG autostart. `/etc/disti-kiosk.conf` is created once and remains local. Its
 launcher waits for nginx, uses a nonblocking per-session lock, and starts either
 `chromium` or `chromium-browser`; an outer loop retries ten seconds after exit.
-The default URL is the currently operational nginx/Grafana entry point and can
-later be changed locally to the dedicated Next.js touch route.
+The default URL is the currently operational nginx/Grafana entry point. The
+retired Next.js frontend is not part of the current Compose architecture.
 
 ## Watchdog security and behavior
 

@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
 
   postgres:
@@ -20,8 +18,7 @@ services:
         ipv4_address: 172.16.238.11
   
   mqtt:
-    #image: mjenz/rpi-mosquitto:latest
-    image: eclipse-mosquitto
+    image: eclipse-mosquitto:2
     container_name: mqtt-broker
     ports:
       - "1883:1883"
@@ -101,50 +98,6 @@ services:
     networks:
       example-network:
 
-  frontend:
-    # image: nextjs
-    image: jokley/disti-nextjs
-    container_name: next-frontend
-    # Hardware access belongs exclusively to hardware-agent in raspberry mode.
-    #build:
-      #context: ./frontend
-    restart: unless-stopped
-    ports:
-      - "3010:3010"
-    networks:
-      example-network:
-        ipv4_address: 172.16.238.14
-
-
-  # influxdb:
-  #   image: arm32v7/influxdb
-  #   restart: unless-stopped
-  #   env_file:
-  #     - disti.env
-  #   volumes:
-  #     # Mount for influxdb data directory and configuration
-  #     - influxdb:/var/lib/influxdb:rw
-  #     - ./influxdb/influxdb.conf:/etc/influxdb/influxdb.conf
-  #   ports:
-  #     - "8086:8086"
-  #   networks:
-  #     example-network:
-  #       ipv4_address: 172.16.238.16
-
-  # telegraf:
-  #   image: arm32v7/telegraf
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - influxdb
-  #   volumes:
-  #     # Mount for telegraf config
-  #     - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
-  #   env_file:
-  #     - disti.env
-  #   networks:
-  #     example-network:
-  #       ipv4_address: 172.16.238.17
-
   grafana:
     image: grafana/grafana:9.2.3
     restart: unless-stopped
@@ -163,7 +116,7 @@ services:
         
         
   nginx:
-    image: arm32v6/nginx:alpine
+    image: nginx:alpine
     container_name: nginx
     restart: unless-stopped
     ports:
