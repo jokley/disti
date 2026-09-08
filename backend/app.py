@@ -21,6 +21,14 @@ def _json(row):
     return {key: value.isoformat() if isinstance(value, datetime) else value for key, value in row.items()}
 
 
+def _calibration_json(row):
+    """Expose the established API name without leaking the database column name."""
+    result = _json(row)
+    if result is not None and "calibration_offset" in result:
+        result["offset"] = result.pop("calibration_offset")
+    return result
+
+
 def create_app(repository=None):
     app = Flask(__name__)
     CORS(app)
@@ -76,24 +84,28 @@ def create_app(repository=None):
 
     @app.get("/api/sensors/<sensor_id>/calibration")
     def calibrations(sensor_id):
-        return jsonify([_json(row) for row in repo.list_calibrations(sensor_id)])
+        return jsonify([_calibration_json(row) for row in repo.list_calibrations(sensor_id)])
 
     @app.post("/api/sensors/<sensor_id>/calibration/start")
     def calibration_start(sensor_id):
         row = repo.start_calibration(sensor_id, (request.get_json(silent=True) or {}).get("model", "linear"))
-        return jsonify(_json(row)), 201
+        return jsonify(_calibration_json(row)), 201
 
     @app.post("/api/sensors/<sensor_id>/calibration/point")
     def calibration_point(sensor_id):
         data = request.get_json(force=True)
         row = repo.add_calibration_point(sensor_id, data["calibration_id"], data)
-        return jsonify(_json(row)), 201
+        return jsonify(_calibration_json(row)), 201
 
     @app.post("/api/sensors/<sensor_id>/calibration/save")
     def calibration_save(sensor_id):
         data = request.get_json(force=True)
+        # ``offset`` is the public API contract; the persistence boundary uses
+        # the non-reserved, explicit ``calibration_offset`` name.
+        if "offset" in data:
+            data["calibration_offset"] = data.pop("offset")
         row = repo.save_calibration(sensor_id, data["calibration_id"], data, data.get("activate", True))
-        return jsonify(_json(row))
+        return jsonify(_calibration_json(row))
 
     @app.post("/api/runs")
     def start_run():

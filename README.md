@@ -10,10 +10,14 @@ but is not in the local acquisition path.
 ```sh
 cp disti.env.example disti.env
 nano disti.env                       # replace every change-me value
-docker compose --env-file disti.env up -d postgres
-docker compose --env-file disti.env run --rm backend python migrate.py
+docker compose --env-file disti.env up -d postgres backend
+docker compose --env-file disti.env exec -T backend python migrate.py
 docker compose --env-file disti.env up -d
 ```
+
+Migrations run inside the already allocated backend container. Do not use
+`docker compose run` for migrations: this stack assigns static service IPs, so
+an extra one-off backend container can collide with the running backend's IP.
 
 `disti.env` is the single device-local application configuration file. It is
 ignored by Git and is never replaced by provisioning or rollout. The tracked
@@ -72,7 +76,7 @@ uncorrected/calibrated values and calibration identity.
 Seed a complete fixed 91-minute engineering run with:
 
 ```sh
-docker compose run --rm backend python seed_mock_run.py
+docker compose --env-file disti.env exec -T backend python seed_mock_run.py
 ```
 
 The seed is idempotent and includes BoilerTop, raw and placeholder-calibrated
@@ -98,6 +102,8 @@ rolled back.
 
 The Flask API supports sensor discovery and calibration history/activation,
 run start/stop, fraction boundaries and manual cuts. The
+calibration API retains its `offset` field for client compatibility and maps it
+to the database's non-reserved `calibration_offset` column. The
 `measurement_derivatives` view provides d/dt and d²/dt² for temperature and EC;
 `distillation_timeline` combines readings, fractions, cuts, and actuator events
 for direct Grafana queries.

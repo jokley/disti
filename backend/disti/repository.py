@@ -101,13 +101,13 @@ class Repository:
             raise ValueError("calibration not found")
         finalized = calibration.get("finalized_at")
         if finalized and (data.get("slope", calibration.get("slope")) != calibration.get("slope") or
-                          data.get("offset", calibration.get("offset")) != calibration.get("offset")):
+                          data.get("calibration_offset", calibration.get("calibration_offset")) != calibration.get("calibration_offset")):
             raise ValueError("finalized calibration coefficients are immutable")
         if activate:
             self._execute("UPDATE sensor_calibrations SET active=%s WHERE sensor_id=%s", (False, sensor_id), fetch=None)
         if not finalized:
-            self._execute("UPDATE sensor_calibrations SET slope=%s, offset=%s, finalized_at=%s WHERE id=%s",
-                          (data.get("slope"), data.get("offset"), now().isoformat(), calibration_id), fetch=None)
+            self._execute("UPDATE sensor_calibrations SET slope=%s, calibration_offset=%s, finalized_at=%s WHERE id=%s",
+                          (data.get("slope"), data.get("calibration_offset"), now().isoformat(), calibration_id), fetch=None)
         self._execute("UPDATE sensor_calibrations SET active=%s, activated_at=%s WHERE id=%s",
                       (activate, now().isoformat() if activate else None, calibration_id), fetch=None)
         return self._execute("SELECT * FROM sensor_calibrations WHERE id=%s", (calibration_id,), "one")
