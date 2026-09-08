@@ -18,13 +18,17 @@ services:
         ipv4_address: 172.16.238.11
   
   mqtt:
-    image: eclipse-mosquitto:2
+    image: disti-mosquitto
+    build:
+      context: ./mosquitto
     container_name: mqtt-broker
+    restart: unless-stopped
+    env_file:
+      - ${DISTI_ENV_FILE:-disti.env}
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
-      - ${DISTI_MQTT_PASSWORD_FILE:-./mosquitto/password.txt}:/mosquitto/config/password.txt:ro
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     networks:
       example-network:  
         ipv4_address: 172.16.238.12
@@ -122,8 +126,7 @@ services:
     ports:
       - "80:80"
     volumes:
-       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-       - ${DISTI_NGINX_HTPASSWD_FILE:-./nginx/.htpasswd}:/etc/nginx/.htpasswd:ro
+       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       example-network:
         ipv4_address: 172.16.238.10
