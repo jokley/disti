@@ -10,9 +10,9 @@ but is not in the local acquisition path.
 ```sh
 cp disti.env.example disti.env
 nano disti.env                       # replace every change-me value
-docker compose up -d postgres
-docker compose run --rm backend python migrate.py
-docker compose up -d
+docker compose --env-file disti.env up -d postgres
+docker compose --env-file disti.env run --rm backend python migrate.py
+docker compose --env-file disti.env up -d
 ```
 
 `disti.env` is the single device-local application configuration file. It is
@@ -21,11 +21,31 @@ ignored by Git and is never replaced by provisioning or rollout. The tracked
 `DOCKER_MQTT_INIT_USERNAME` and `DOCKER_MQTT_INIT_PASSWORD` are the only MQTT
 credentials an operator maintains.
 
+The same file supplies PostgreSQL initialization and every database client.
+Compose maps `DOCKER_POSTGRES_INIT_USERNAME`,
+`DOCKER_POSTGRES_INIT_PASSWORD`, and `POSTGRES_DB` to the TimescaleDB image's
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`; clients use those same
+values and the Docker service hostname `POSTGRES_HOST=postgres`. Always pass
+`--env-file disti.env` to manual Compose commands so Compose can resolve the
+mapping as well as inject the file into containers.
+
+PostgreSQL applies initialization variables only when its data directory is
+first initialized. An existing production volume must not be deleted
+automatically. For the current disposable QA installation only, one manual
+removal of `disti_db_data` may be required after stopping the stack if it was
+initialized with the former hard-coded credentials. This destroys that QA
+database; do not run it against data that must be retained.
+
 At every broker start, the DISTI Mosquitto entrypoint validates those variables
-and uses `mosquitto_passwd` to create a mode-0600 hashed password file under
-`/run/mosquitto` inside the container. The plaintext password is neither logged
-nor stored in a second host file. Mosquitto continues to run with anonymous
-access disabled and `password_file` authentication enabled.
+and uses `mosquitto_passwd` to create a mode-0600 hashed password file in a
+unique temporary path under `/run/mosquitto`. It resolves the image's
+`mosquitto` UID/GID at runtime, gives that user access, and atomically replaces
+the configured file before handing off to the upstream entrypoint. Thus a
+restart safely replaces the previous generated file and a container recreation
+starts cleanly; no generated credential state is persisted. The plaintext
+password is neither logged nor stored in a second host file. Mosquitto continues
+to run with anonymous access disabled and `password_file` authentication
+enabled.
 
 nginx does not contain an `auth_basic` directive and does not read an
 `.htpasswd`; its former mount was unused and has been removed. Browser login is
