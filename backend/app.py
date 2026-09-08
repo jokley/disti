@@ -62,7 +62,10 @@ def create_app(repository=None):
         except Exception as exc:
             result.update(status="degraded", reason=f"database: {exc}")
         try:
-            with urlopen(os.getenv("DISTI_HARDWARE_HEALTH_URL", "http://hardware-agent:8081"), timeout=5) as response:
+            health_url = os.getenv("DISTI_HARDWARE_HEALTH_URL", "http://hardware-agent:8081").rstrip("/")
+            if not health_url.endswith("/healthz"):
+                health_url += "/healthz"
+            with urlopen(health_url, timeout=5) as response:
                 agent = json_module.load(response)
             agent["healthy"] = agent.get("status") in ("healthy", "replay-complete")
             result["hardware_agent"] = agent

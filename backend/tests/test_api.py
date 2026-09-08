@@ -46,15 +46,18 @@ def test_backend_health_checks_database(repo):
 
 
 def test_watchdog_status_reports_database_and_hardware(repo, monkeypatch):
+    requested = []
     class Response:
         def __enter__(self): return self
         def __exit__(self, *_): pass
         def read(self): return b'{"status":"healthy","last_read_at":1}'
-    monkeypatch.setattr(app_module, "urlopen", lambda *args, **kwargs: Response())
+    monkeypatch.setenv("DISTI_HARDWARE_HEALTH_URL", "http://hardware-agent:8081")
+    monkeypatch.setattr(app_module, "urlopen", lambda url, **kwargs: requested.append(url) or Response())
     payload = create_app(repo).test_client().get("/watchdog/status").get_json()
     assert payload["database"]["healthy"] is True
     assert payload["hardware_agent"]["healthy"] is True
     assert payload["status"] == "ok"
+    assert requested == ["http://hardware-agent:8081/healthz"]
 
 
 def test_run_and_fraction_lifecycle(repo):

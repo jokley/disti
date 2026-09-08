@@ -47,7 +47,7 @@ def test_documented_migration_rebuilds_and_uses_running_backend():
 def test_postgres_compose_uses_canonical_device_environment():
     postgres = BASE_COMPOSE.split("  mqtt:", 1)[0]
 
-    assert "- ${DISTI_ENV_FILE:-disti.env}" in postgres
+    assert "- .env" in postgres
     assert "environment:" not in postgres
     assert "url: ${POSTGRES_HOST}:5432" in GRAFANA_DATASOURCE
     assert "database: ${POSTGRES_DB}" in GRAFANA_DATASOURCE
@@ -78,17 +78,17 @@ def test_all_database_consumers_use_canonical_environment_names():
                           flags=re.MULTILINE | re.DOTALL)
         assert match is not None
         section = match.group(1)
-        assert "- ${DISTI_ENV_FILE:-disti.env}" in section
+        assert "- .env" in section
 
 
 def test_example_environment_is_safe_and_local_environment_is_ignored():
-    example = (ROOT / "disti.env.example").read_text()
+    example = (ROOT / ".env.example").read_text()
     assert "POSTGRES_HOST=postgres" in example
-    assert "POSTGRES_DB=postgres" in example
-    assert "POSTGRES_USER=postgres" in example
+    assert "POSTGRES_DB=jokley" in example
+    assert "POSTGRES_USER=jokley" in example
     assert "POSTGRES_PASSWORD=change-me" in example
     assert "DOCKER_POSTGRES_INIT_" not in example
-    assert "disti.env" in (ROOT / ".gitignore").read_text().splitlines()
+    assert ".env" in (ROOT / ".gitignore").read_text().splitlines()
 
 
 def test_repository_requires_explicit_postgres_configuration(monkeypatch):
@@ -133,13 +133,13 @@ def test_repository_passes_explicit_postgres_configuration(monkeypatch):
 
 
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker Compose unavailable")
-def test_compose_config_injects_postgres_environment_without_env_file_flag(tmp_path):
-    env_file = tmp_path / "disti.env"
-    env_file.write_text((ROOT / "disti.env.example").read_text())
+def test_compose_config_injects_root_environment_without_env_file_flag(tmp_path):
+    compose = tmp_path / "docker-compose.yaml"
+    compose.write_text(BASE_COMPOSE)
+    (tmp_path / ".env").write_text((ROOT / ".env.example").read_text())
     result = subprocess.run(
-        ["docker", "compose", "-f", str(ROOT / "docker-compose.yaml"), "config"],
-        cwd=ROOT,
-        env=os.environ | {"DISTI_ENV_FILE": str(env_file)},
+        ["docker", "compose", "-f", str(compose), "config"],
+        cwd=tmp_path,
         text=True,
         capture_output=True,
     )
@@ -149,10 +149,14 @@ def test_compose_config_injects_postgres_environment_without_env_file_flag(tmp_p
                       flags=re.MULTILINE | re.DOTALL)
     assert match is not None
     postgres = match.group(1)
-    assert "POSTGRES_DB: postgres" in postgres
+    assert "POSTGRES_DB: jokley" in postgres
     assert "POSTGRES_HOST: postgres" in postgres
-    assert "POSTGRES_USER: postgres" in postgres
+    assert "POSTGRES_USER: jokley" in postgres
     assert "POSTGRES_PASSWORD: change-me" in postgres
+    grafana = re.search(r"^  grafana:\n(.*?)(?=^  \S|\Z)", result.stdout,
+                        flags=re.MULTILINE | re.DOTALL).group(1)
+    assert "GF_SECURITY_ADMIN_USER: jokley" in grafana
+    assert "GF_SECURITY_ADMIN_PASSWORD: change-me" in grafana
 
 
 def test_mqtt_credentials_generate_an_untracked_password_file_at_startup():

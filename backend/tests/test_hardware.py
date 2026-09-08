@@ -41,7 +41,7 @@ def test_mock_agent_health_endpoint(repo):
     server = make_health_server(agent, 0)
     thread = Thread(target=server.handle_request)
     thread.start()
-    payload = json.load(urlopen(f"http://127.0.0.1:{server.server_port}", timeout=2))
+    payload = json.load(urlopen(f"http://127.0.0.1:{server.server_port}/healthz", timeout=2))
     thread.join(timeout=2); server.server_close()
     assert payload["status"] == "healthy"
 
