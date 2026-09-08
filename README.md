@@ -32,6 +32,10 @@ docker compose --env-file disti.env exec -T backend python migrate.py
 docker compose --env-file disti.env up -d
 ```
 
+Migrations run inside the already allocated backend container. Do not use
+`docker compose run` for migrations: this stack assigns static service IPs, so
+an extra one-off backend container can collide with the running backend's IP.
+
 `disti.env` is the single device-local application configuration file. It is
 ignored by Git and is never replaced by provisioning or rollout. The tracked
 `disti.env.example` is the canonical safe template. In particular,
