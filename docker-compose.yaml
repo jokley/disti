@@ -7,10 +7,6 @@ services:
     restart: always
     env_file:
       - ${DISTI_ENV_FILE:-disti.env}
-    environment:
-      POSTGRES_USER: ${DOCKER_POSTGRES_INIT_USERNAME}
-      POSTGRES_PASSWORD: ${DOCKER_POSTGRES_INIT_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:

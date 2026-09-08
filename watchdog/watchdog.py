@@ -28,7 +28,7 @@ class Watchdog:
   now=self.clock();self.last_restart[name]=now;self.restarts.append(now);return True
  def database_healthy(self):
   try:
-   conn=psycopg2.connect(host=os.getenv("POSTGRES_HOST","postgres"),database=os.getenv("POSTGRES_DB","postgres"),user=os.getenv("DOCKER_POSTGRES_INIT_USERNAME","postgres"),password=os.getenv("DOCKER_POSTGRES_INIT_PASSWORD","postgres"),connect_timeout=5);conn.close();return True
+   conn=psycopg2.connect(host=os.getenv("POSTGRES_HOST","postgres"),database=os.getenv("POSTGRES_DB","postgres"),user=os.getenv("POSTGRES_USER","postgres"),password=os.getenv("POSTGRES_PASSWORD","postgres"),connect_timeout=5);conn.close();return True
   except Exception:return False
  def check(self):
   if not self.healthy():

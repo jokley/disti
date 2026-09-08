@@ -1,7 +1,11 @@
 from pathlib import Path
 import os
+import re
 import stat
+import shutil
 import subprocess
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -42,14 +46,69 @@ def test_postgres_compose_uses_canonical_device_environment():
     postgres = BASE_COMPOSE.split("  mqtt:", 1)[0]
 
     assert "- ${DISTI_ENV_FILE:-disti.env}" in postgres
-    assert "POSTGRES_USER: ${DOCKER_POSTGRES_INIT_USERNAME}" in postgres
-    assert "POSTGRES_PASSWORD: ${DOCKER_POSTGRES_INIT_PASSWORD}" in postgres
-    assert "POSTGRES_DB: ${POSTGRES_DB}" in postgres
-    assert "POSTGRES_USER=postgres" not in postgres
-    assert "POSTGRES_PASSWORD=postgres" not in postgres
-    assert "POSTGRES_DB=postgres" not in postgres
+    assert "environment:" not in postgres
     assert "url: ${POSTGRES_HOST}:5432" in GRAFANA_DATASOURCE
     assert "database: ${POSTGRES_DB}" in GRAFANA_DATASOURCE
+    assert "user: ${POSTGRES_USER}" in GRAFANA_DATASOURCE
+    assert "password: ${POSTGRES_PASSWORD}" in GRAFANA_DATASOURCE
+
+
+def test_all_database_consumers_use_canonical_environment_names():
+    runtime_files = [
+        ROOT / "docker-compose.yaml",
+        ROOT / "backend/disti/repository.py",
+        ROOT / "backend/hardware_agent.py",
+        ROOT / "backend/migrate.py",
+        ROOT / "watchdog/watchdog.py",
+        ROOT / "grafana/provisioning/datasources/datasources.yaml",
+        ROOT / "piTerminal/rollout/disti-update",
+        ROOT / "piTerminal/setup_rollout.sh",
+    ]
+    combined = "\n".join(path.read_text() for path in runtime_files)
+    assert "DOCKER_POSTGRES_INIT_USERNAME" not in combined
+    assert "DOCKER_POSTGRES_INIT_PASSWORD" not in combined
+    for name in ("POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"):
+        assert name in combined
+
+    for service in ("postgres", "backend", "hardware-agent", "watchdog"):
+        match = re.search(rf"^  {re.escape(service)}:\n(.*?)(?=^  \S|\Z)", BASE_COMPOSE,
+                          flags=re.MULTILINE | re.DOTALL)
+        assert match is not None
+        section = match.group(1)
+        assert "- ${DISTI_ENV_FILE:-disti.env}" in section
+
+
+def test_example_environment_is_safe_and_local_environment_is_ignored():
+    example = (ROOT / "disti.env.example").read_text()
+    assert "POSTGRES_HOST=postgres" in example
+    assert "POSTGRES_DB=postgres" in example
+    assert "POSTGRES_USER=postgres" in example
+    assert "POSTGRES_PASSWORD=change-me" in example
+    assert "DOCKER_POSTGRES_INIT_" not in example
+    assert "disti.env" in (ROOT / ".gitignore").read_text().splitlines()
+
+
+@pytest.mark.skipif(shutil.which("docker") is None, reason="Docker Compose unavailable")
+def test_compose_config_injects_postgres_environment_without_env_file_flag(tmp_path):
+    env_file = tmp_path / "disti.env"
+    env_file.write_text((ROOT / "disti.env.example").read_text())
+    result = subprocess.run(
+        ["docker", "compose", "-f", str(ROOT / "docker-compose.yaml"), "config"],
+        cwd=ROOT,
+        env=os.environ | {"DISTI_ENV_FILE": str(env_file)},
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "variable is not set" not in result.stderr
+    match = re.search(r"^  postgres:\n(.*?)(?=^  \S|\Z)", result.stdout,
+                      flags=re.MULTILINE | re.DOTALL)
+    assert match is not None
+    postgres = match.group(1)
+    assert "POSTGRES_DB: postgres" in postgres
+    assert "POSTGRES_HOST: postgres" in postgres
+    assert "POSTGRES_USER: postgres" in postgres
+    assert "POSTGRES_PASSWORD: change-me" in postgres
 
 
 def test_mqtt_credentials_generate_an_untracked_password_file_at_startup():

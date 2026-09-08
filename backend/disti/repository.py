@@ -29,8 +29,8 @@ class Repository:
             host=os.getenv("POSTGRES_HOST", "postgres"),
             port=os.getenv("POSTGRES_PORT", "5432"),
             database=os.getenv("POSTGRES_DB", "postgres"),
-            user=os.getenv("DOCKER_POSTGRES_INIT_USERNAME", "postgres"),
-            password=os.getenv("DOCKER_POSTGRES_INIT_PASSWORD", "postgres")))
+            user=os.getenv("POSTGRES_USER", "postgres"),
+            password=os.getenv("POSTGRES_PASSWORD", "postgres")))
 
     def _execute(self, sql, params=(), fetch="all"):
         conn = self.connection_factory()

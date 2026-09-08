@@ -32,11 +32,13 @@ def test_provisioning_defaults_to_main_and_installs_stable_runtime():
     assert "DISTI_MQTT_PASSWORD_FILE" not in setup
 
 
-def test_rollout_uses_device_environment_for_compose_interpolation():
+def test_rollout_selects_device_env_file_without_compose_interpolation_file():
     root = Path(__file__).parents[2]
     updater = (root / "piTerminal/rollout/disti-update").read_text()
 
-    assert 'COMPOSE_ARGS=(--env-file "$DISTI_ENV_FILE" -f docker-compose.yaml)' in updater
+    assert 'export DISTI_ENV_FILE="${DISTI_ENV_FILE:-$DISTI_DIR/disti.env}"' in updater
+    assert "COMPOSE_ARGS=(-f docker-compose.yaml)" in updater
+    assert "--env-file" not in updater
 
 
 def test_runtime_rejects_dev_before_git_or_docker(tmp_path):
