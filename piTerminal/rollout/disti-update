@@ -16,7 +16,7 @@ load_config(){
   export DISTI_ENV_FILE="${DISTI_ENV_FILE:-$DISTI_DIR/disti.env}"
   [[ -r "$DISTI_ENV_FILE" ]] || fail "Device configuration missing or unreadable: $DISTI_ENV_FILE"
 }
-compose_args(){ COMPOSE_ARGS=(-f docker-compose.yaml); if [[ "$COMPOSE_PROFILE" == raspberry ]]; then COMPOSE_ARGS+=(-f docker-compose.raspberry.yaml); fi; }
+compose_args(){ COMPOSE_ARGS=(--env-file "$DISTI_ENV_FILE" -f docker-compose.yaml); if [[ "$COMPOSE_PROFILE" == raspberry ]]; then COMPOSE_ARGS+=(-f docker-compose.raspberry.yaml); fi; }
 run_compose(){ docker compose "${COMPOSE_ARGS[@]}" "$@"; }
 wait_for_health(){ local attempt; for ((attempt=1;attempt<=HEALTH_RETRIES;attempt++)); do
   if curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" >/dev/null; then log "Health check passed: $HEALTH_URL"; return 0; fi

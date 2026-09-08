@@ -15,8 +15,8 @@ datasources:
 
 - name: Postgres
   type: postgres
-  url: postgres:5432
-  database: postgres
+  url: ${POSTGRES_HOST}:5432
+  database: ${POSTGRES_DB}
   user: ${DOCKER_POSTGRES_INIT_USERNAME}
   secureJsonData:
     password: ${DOCKER_POSTGRES_INIT_PASSWORD}
