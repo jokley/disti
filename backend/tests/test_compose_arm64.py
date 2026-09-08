@@ -9,6 +9,7 @@ BASE_COMPOSE = (ROOT / "docker-compose.yaml").read_text()
 RASPBERRY_COMPOSE = (ROOT / "docker-compose.raspberry.yaml").read_text()
 NGINX_CONFIG = (ROOT / "nginx/nginx.conf").read_text()
 GRAFANA_DATASOURCE = (ROOT / "grafana/provisioning/datasources/datasources.yaml").read_text()
+README = (ROOT / "README.md").read_text()
 
 
 def test_compose_has_no_legacy_architecture_or_frontend_references():
@@ -29,6 +30,12 @@ def test_compose_uses_portable_multi_arch_images():
     assert "image: timescale/timescaledb:latest-pg15" in BASE_COMPOSE
     assert "image: grafana/grafana:9.2.3" in BASE_COMPOSE
     assert BASE_COMPOSE.count("image: disti-backend") == 2
+
+
+def test_documented_migration_rebuilds_and_uses_running_backend():
+    assert "up -d --build postgres backend" in README
+    assert "exec -T backend python migrate.py" in README
+    assert "run --rm backend python migrate.py" not in README
 
 
 def test_postgres_compose_uses_canonical_device_environment():

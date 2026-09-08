@@ -9,6 +9,8 @@ def test_calibration_history_and_active_selection(repo):
     point = client.post("/api/sensors/ec-1/calibration/point", json={"calibration_id":first["id"],"raw_mv":700,"raw_value":5600,"reference_value":1.413,"solution_temperature":25}).get_json()
     assert "reference_value" in point["points"]
     saved = client.post("/api/sensors/ec-1/calibration/save", json={"calibration_id":first["id"],"slope":0.002,"offset":0.1}).get_json()
+    assert saved["offset"] == 0.1
+    assert "calibration_offset" not in saved
     second = client.post("/api/sensors/ec-1/calibration/start", json={}).get_json()
     client.post("/api/sensors/ec-1/calibration/save", json={"calibration_id":second["id"],"activate":True})
     history = client.get("/api/sensors/ec-1/calibration").get_json()
@@ -20,12 +22,20 @@ def test_finalized_calibration_data_is_immutable(repo):
     repo.ensure_sensor("ec-1", "EC", "ec")
     calibration = repo.start_calibration("ec-1", "linear")
     repo.add_calibration_point("ec-1", calibration["id"], {"raw_mv": 700, "reference_value": 1.413})
-    repo.save_calibration("ec-1", calibration["id"], {"slope": 0.002, "offset": 0.1})
+    repo.save_calibration("ec-1", calibration["id"], {"slope": 0.002, "calibration_offset": 0.1})
     try:
         repo.add_calibration_point("ec-1", calibration["id"], {"raw_mv": 800})
         assert False, "finalized calibration accepted a new point"
     except ValueError:
         pass
+
+
+def test_initial_schema_uses_non_reserved_calibration_offset():
+    from pathlib import Path
+
+    sql = (Path(__file__).parents[1] / "migrations" / "001_modular_hardware.sql").read_text()
+    assert "calibration_offset double precision" in sql
+    assert " offset double precision" not in sql
 
 
 def test_backend_health_checks_database(repo):

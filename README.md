@@ -10,8 +10,25 @@ but is not in the local acquisition path.
 ```sh
 cp disti.env.example disti.env
 nano disti.env                       # replace every change-me value
-docker compose --env-file disti.env up -d postgres
-docker compose --env-file disti.env run --rm backend python migrate.py
+docker compose --env-file disti.env up -d --build postgres backend
+docker compose --env-file disti.env exec -T backend python migrate.py
+docker compose --env-file disti.env up -d
+```
+
+Migrations run inside the already allocated backend container. Do not use
+`docker compose run` for migrations: this stack assigns static service IPs, so
+an extra one-off backend container can collide with the running backend's IP.
+The `--build` is also required because migrations are copied into the backend
+image rather than bind-mounted from the checkout. Without it, `exec` can run an
+older copy of `migrate.py` and its SQL even when the Git working tree is current.
+
+After pulling a migration fix on an already-running QA controller, refresh the
+backend image and container before retrying it:
+
+```sh
+docker compose --env-file disti.env build backend
+docker compose --env-file disti.env up -d --no-deps --force-recreate backend
+docker compose --env-file disti.env exec -T backend python migrate.py
 docker compose --env-file disti.env up -d
 ```
 
@@ -72,7 +89,7 @@ uncorrected/calibrated values and calibration identity.
 Seed a complete fixed 91-minute engineering run with:
 
 ```sh
-docker compose run --rm backend python seed_mock_run.py
+docker compose --env-file disti.env exec -T backend python seed_mock_run.py
 ```
 
 The seed is idempotent and includes BoilerTop, raw and placeholder-calibrated
@@ -98,6 +115,8 @@ rolled back.
 
 The Flask API supports sensor discovery and calibration history/activation,
 run start/stop, fraction boundaries and manual cuts. The
+calibration API retains its `offset` field for client compatibility and maps it
+to the database's non-reserved `calibration_offset` column. The
 `measurement_derivatives` view provides d/dt and d²/dt² for temperature and EC;
 `distillation_timeline` combines readings, fractions, cuts, and actuator events
 for direct Grafana queries.
