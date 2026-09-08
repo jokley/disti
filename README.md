@@ -8,20 +8,30 @@ but is not in the local acquisition path.
 ## First-time setup
 
 ```sh
-cp disti.env.example disti.env       # replace every change-me value
+cp disti.env.example disti.env
+nano disti.env                       # replace every change-me value
 docker compose up -d postgres
 docker compose run --rm backend python migrate.py
 docker compose up -d
 ```
 
-`disti.env`, `mosquitto/password.txt`, and `nginx/.htpasswd` contain legacy
-device configuration and are currently tracked. Existing files are not removed,
-rewritten, or rotated by this change. The matching `.gitignore` rules only
-protect new untracked files; they cannot protect files already in Git. The safe
-staged migration is: copy each file to a device-local persisted path, update
-Compose mounts through a separately validated release, verify each controller,
-then remove the legacy files from Git in a later release. Until that migration,
-operators must review changes to these paths before every update.
+`disti.env` is the single device-local application configuration file. It is
+ignored by Git and is never replaced by provisioning or rollout. The tracked
+`disti.env.example` is the canonical safe template. In particular,
+`DOCKER_MQTT_INIT_USERNAME` and `DOCKER_MQTT_INIT_PASSWORD` are the only MQTT
+credentials an operator maintains.
+
+At every broker start, the DISTI Mosquitto entrypoint validates those variables
+and uses `mosquitto_passwd` to create a mode-0600 hashed password file under
+`/run/mosquitto` inside the container. The plaintext password is neither logged
+nor stored in a second host file. Mosquitto continues to run with anonymous
+access disabled and `password_file` authentication enabled.
+
+nginx does not contain an `auth_basic` directive and does not read an
+`.htpasswd`; its former mount was unused and has been removed. Browser login is
+handled by Grafana at the `/` route. If HTTP Basic authentication is introduced
+later, its credential provisioning must be designed explicitly rather than
+committing an `.htpasswd`.
 
 ## Hardware modes
 
@@ -118,11 +128,19 @@ opt-in through `--usb-modem-recovery`.
 The rollout installer copies the runtime updater outside the checkout to
 `/usr/local/sbin/disti-update`, creates the preserved device-local
 `/etc/disti-update.conf`, and enables a persistent, randomized systemd timer.
-It also stages the legacy tracked credentials into the ignored `.disti-local/`
-directory without modifying the originals. Existing local copies and `/etc`
-configuration are preserved unless an explicit replacement flag is supplied.
-After every client has successfully migrated away from `development`, a later
-release may remove the legacy tracked files; this branch does not remove them.
+The installer creates `disti.env` from the safe example only when it is absent
+and otherwise preserves it. New `/etc/disti-update.conf` files point directly
+to that file. `.disti-local/` is retained in `.gitignore` only so data left by
+older installations cannot be committed; the current rollout owns no files
+there. Existing `/etc/disti-update.conf` files are preserved unless
+`--replace-config` is requested.
+
+On a controller upgraded from the older layout, copy the active values from
+`.disti-local/disti.env` to the repository-root `disti.env`, then rerun
+`setup_rollout.sh --replace-config` with the controller's existing branch and
+profile selections. After successful startup, remove the obsolete local MQTT
+password and nginx htpasswd copies. Updates reset only tracked files, so the
+root `disti.env` and any ignored migration leftovers are not overwritten.
 
 Useful diagnostics:
 
@@ -138,8 +156,8 @@ The kiosk is installed in the user's graphical session using labwc, LXDE, or
 XDG autostart. `/etc/disti-kiosk.conf` is created once and remains local. Its
 launcher waits for nginx, uses a nonblocking per-session lock, and starts either
 `chromium` or `chromium-browser`; an outer loop retries ten seconds after exit.
-The default URL is the currently operational nginx/Grafana entry point. The
-retired Next.js frontend is not part of the current Compose architecture.
+The default URL is the operational nginx/Grafana entry point; nginx and the
+kiosk both use the Grafana route at `/`.
 
 ## Watchdog security and behavior
 

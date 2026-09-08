@@ -15,11 +15,13 @@ install -o root -g root -m0755 "$SCRIPT_DIR/rollout/disti-update" "$RUNTIME_SCRI
 install -o root -g root -m0644 "$SCRIPT_DIR/rollout/disti-update.service" /etc/systemd/system/disti-update.service
 install -o root -g root -m0644 "$SCRIPT_DIR/rollout/disti-update.timer" /etc/systemd/system/disti-update.timer
 sed -i -e "s/^User=.*/User=$DISTI_USER/" -e "s/^Group=.*/Group=$GROUP/" /etc/systemd/system/disti-update.service
-LOCAL_DIR="$REPO_DIR/.disti-local"; install -d -o "$DISTI_USER" -g "$GROUP" -m0700 "$LOCAL_DIR"
-copy_local(){ local src=$1 dst=$2 mode=$3; if [[ ! -e $dst ]];then [[ -f $src ]]||fail "Legacy source missing: $src"; install -o "$DISTI_USER" -g "$GROUP" -m "$mode" "$src" "$dst";fi; }
-copy_local "$REPO_DIR/disti.env" "$LOCAL_DIR/disti.env" 0600
-copy_local "$REPO_DIR/mosquitto/password.txt" "$LOCAL_DIR/mosquitto-password.txt" 0600
-copy_local "$REPO_DIR/nginx/.htpasswd" "$LOCAL_DIR/nginx.htpasswd" 0600
+if [[ ! -e "$REPO_DIR/disti.env" ]]; then
+  [[ -f "$REPO_DIR/disti.env.example" ]] || fail "Missing disti.env.example"
+  install -o "$DISTI_USER" -g "$GROUP" -m0600 "$REPO_DIR/disti.env.example" "$REPO_DIR/disti.env"
+  log "Created $REPO_DIR/disti.env; replace placeholder credentials before starting DISTI"
+else
+  log "Preserving $REPO_DIR/disti.env"
+fi
 if [[ ! -e $CONFIG_FILE || $REPLACE_CONFIG == true ]];then cat >"$CONFIG_FILE" <<CFG
 DISTI_DIR="$REPO_DIR"
 DEPLOY_BRANCH="$DEPLOY_BRANCH"
@@ -28,9 +30,7 @@ HEALTH_URL="http://127.0.0.1:5000/healthz"
 HEALTH_RETRIES="12"
 HEALTH_SLEEP_SEC="10"
 COMPOSE_WAIT_TIMEOUT_SEC="180"
-DISTI_ENV_FILE="$LOCAL_DIR/disti.env"
-DISTI_MQTT_PASSWORD_FILE="$LOCAL_DIR/mosquitto-password.txt"
-DISTI_NGINX_HTPASSWD_FILE="$LOCAL_DIR/nginx.htpasswd"
+DISTI_ENV_FILE="$REPO_DIR/disti.env"
 CFG
 chmod 0644 "$CONFIG_FILE";chown root:root "$CONFIG_FILE";else log "Preserving $CONFIG_FILE";fi
 [[ "$REPO_DIR" == "$HOME_DIR"* ]]||log "WARNING: repository is outside $DISTI_USER home"

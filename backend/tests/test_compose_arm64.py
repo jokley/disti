@@ -21,10 +21,25 @@ def test_compose_has_no_legacy_architecture_or_frontend_references():
 
 def test_compose_uses_portable_multi_arch_images():
     assert "image: nginx:alpine" in BASE_COMPOSE
-    assert "image: eclipse-mosquitto:2" in BASE_COMPOSE
+    assert "context: ./mosquitto" in BASE_COMPOSE
     assert "image: timescale/timescaledb:latest-pg15" in BASE_COMPOSE
     assert "image: grafana/grafana:9.2.3" in BASE_COMPOSE
     assert BASE_COMPOSE.count("image: disti-backend") == 2
+
+
+def test_mqtt_credentials_generate_an_untracked_password_file_at_startup():
+    entrypoint = (ROOT / "mosquitto/docker-entrypoint-disti.sh").read_text()
+    mosquitto_config = (ROOT / "mosquitto/mosquitto.conf").read_text()
+
+    assert "env_file:" in BASE_COMPOSE
+    assert "DOCKER_MQTT_INIT_USERNAME" in entrypoint
+    assert "DOCKER_MQTT_INIT_PASSWORD" in entrypoint
+    assert "mosquitto_passwd -b -c" in entrypoint
+    assert "chmod 0600" in entrypoint
+    assert "allow_anonymous false" in mosquitto_config
+    assert "password_file /run/mosquitto/password.txt" in mosquitto_config
+    assert "DISTI_MQTT_PASSWORD_FILE" not in BASE_COMPOSE
+    assert "nginx/.htpasswd" not in BASE_COMPOSE
 
 
 def test_raspberry_device_access_is_hardware_agent_only():
