@@ -10,7 +10,24 @@ but is not in the local acquisition path.
 ```sh
 cp disti.env.example disti.env
 nano disti.env                       # replace every change-me value
-docker compose --env-file disti.env up -d postgres backend
+docker compose --env-file disti.env up -d --build postgres backend
+docker compose --env-file disti.env exec -T backend python migrate.py
+docker compose --env-file disti.env up -d
+```
+
+Migrations run inside the already allocated backend container. Do not use
+`docker compose run` for migrations: this stack assigns static service IPs, so
+an extra one-off backend container can collide with the running backend's IP.
+The `--build` is also required because migrations are copied into the backend
+image rather than bind-mounted from the checkout. Without it, `exec` can run an
+older copy of `migrate.py` and its SQL even when the Git working tree is current.
+
+After pulling a migration fix on an already-running QA controller, refresh the
+backend image and container before retrying it:
+
+```sh
+docker compose --env-file disti.env build backend
+docker compose --env-file disti.env up -d --no-deps --force-recreate backend
 docker compose --env-file disti.env exec -T backend python migrate.py
 docker compose --env-file disti.env up -d
 ```
