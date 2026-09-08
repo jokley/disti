@@ -1,4 +1,3 @@
-disti.env
 mosquitto/password.txt
 nginx/.htpasswd
 .env

@@ -50,6 +50,9 @@ class Agent:
 def make_health_server(agent, port=None):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
+            if self.path != "/healthz":
+                self.send_error(404)
+                return
             body = json.dumps(agent.status).encode()
             self.send_response(200 if agent.status["status"] in ("healthy", "replay-complete") else 503)
             self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(body)

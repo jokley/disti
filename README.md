@@ -8,8 +8,8 @@ but is not in the local acquisition path.
 ## First-time setup
 
 ```sh
-cp disti.env.example disti.env
-nano disti.env                       # replace every change-me value
+cp .env.example .env
+nano .env                            # replace every change-me value
 docker compose up -d --build postgres backend
 docker compose exec -T backend python migrate.py
 docker compose up -d
@@ -43,15 +43,23 @@ Migrations run inside the already allocated backend container. Do not use
 `docker compose run` for migrations: this stack assigns static service IPs, so
 an extra one-off backend container can collide with the running backend's IP.
 
-`disti.env` is the single device-local application configuration file. It is
+`.env` is the single device-local application configuration file. It is
 ignored by Git and is never replaced by provisioning or rollout. The tracked
-`disti.env.example` is the canonical safe template. In particular,
+`.env.example` is the canonical safe template. In particular,
 `DOCKER_MQTT_INIT_USERNAME` and `DOCKER_MQTT_INIT_PASSWORD` are the only MQTT
 credentials an operator maintains.
 
+Compose maps `DOCKER_GRAFANA_INIT_USERNAME` and
+`DOCKER_GRAFANA_INIT_PASSWORD` to Grafana's `GF_SECURITY_ADMIN_USER` and
+`GF_SECURITY_ADMIN_PASSWORD`. Grafana datasource provisioning reads the same
+PostgreSQL variables directly. Mosquitto receives the MQTT variables unchanged
+and generates its hashed runtime-only password file before broker startup. Any
+MQTT client, including the provided Telegraf configuration, uses those same two
+variable names.
+
 The same file supplies PostgreSQL initialization and every database client,
 using one canonical contract: `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`,
-and `POSTGRES_PASSWORD`. Compose injects `disti.env` directly into PostgreSQL,
+and `POSTGRES_PASSWORD`. Compose injects `.env` directly into PostgreSQL,
 backend, hardware-agent, watchdog, and Grafana, so normal operator commands do
 not need `--env-file`:
 
@@ -62,12 +70,8 @@ docker compose ps
 docker compose logs
 ```
 
-`DISTI_ENV_FILE` may select a different device configuration deliberately (the
-rollout tooling uses this for its absolute device-local path); otherwise it
-defaults to `disti.env` in the repository root.
-
 Controllers configured before the canonical naming change require this
-one-time, two-line edit to their existing ignored `disti.env`:
+one-time, two-line edit to their existing ignored `.env`:
 
 ```dotenv
 DOCKER_POSTGRES_INIT_USERNAME=...  -> POSTGRES_USER=...
@@ -119,14 +123,15 @@ committing an `.htpasswd`.
   start with the `docker-compose.raspberry.yaml` overlay. Only hardware-agent
   receives `/dev/i2c-1`; the rest of the stack is not privileged.
 
-The agent's health endpoint is `http://controller:8081`; backend health is
-`/health`. Raw ADC counts and millivolts are always persisted alongside
-uncorrected/calibrated values and calibration identity.
+The agent's health endpoint is `http://127.0.0.1:8081/healthz` on the host and
+`http://hardware-agent:8081/healthz` inside Compose; backend health is
+`http://127.0.0.1:5000/healthz`. Raw ADC counts and millivolts are always
+persisted alongside uncorrected/calibrated values and calibration identity.
 
 Seed a complete fixed 91-minute engineering run with:
 
 ```sh
-docker compose --env-file disti.env exec -T backend python seed_mock_run.py
+docker compose exec -T backend python seed_mock_run.py
 ```
 
 The seed is idempotent and includes BoilerTop, raw and placeholder-calibrated
@@ -204,19 +209,19 @@ opt-in through `--usb-modem-recovery`.
 The rollout installer copies the runtime updater outside the checkout to
 `/usr/local/sbin/disti-update`, creates the preserved device-local
 `/etc/disti-update.conf`, and enables a persistent, randomized systemd timer.
-The installer creates `disti.env` from the safe example only when it is absent
-and otherwise preserves it. New `/etc/disti-update.conf` files point directly
-to that file. `.disti-local/` is retained in `.gitignore` only so data left by
-older installations cannot be committed; the current rollout owns no files
-there. Existing `/etc/disti-update.conf` files are preserved unless
-`--replace-config` is requested.
+The installer creates `.env` from the safe example only when it is absent
+and otherwise preserves it. The updater requires that repository-root file.
+`.disti-local/` is retained in `.gitignore` only so data left by older
+installations cannot be committed; the current rollout owns no files there.
+Existing `/etc/disti-update.conf` files are preserved unless `--replace-config`
+is requested.
 
 On a controller upgraded from the older layout, copy the active values from
-`.disti-local/disti.env` to the repository-root `disti.env`, then rerun
+`.disti-local/disti.env` to the repository-root `.env`, then rerun
 `setup_rollout.sh --replace-config` with the controller's existing branch and
 profile selections. After successful startup, remove the obsolete local MQTT
 password and nginx htpasswd copies. Updates reset only tracked files, so the
-root `disti.env` and any ignored migration leftovers are not overwritten.
+root `.env` and any ignored migration leftovers are not overwritten.
 
 Useful diagnostics:
 
