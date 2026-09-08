@@ -10,9 +10,9 @@ but is not in the local acquisition path.
 ```sh
 cp disti.env.example disti.env
 nano disti.env                       # replace every change-me value
-docker compose --env-file disti.env up -d --build postgres backend
-docker compose --env-file disti.env exec -T backend python migrate.py
-docker compose --env-file disti.env up -d
+docker compose up -d --build postgres backend
+docker compose exec -T backend python migrate.py
+docker compose up -d
 ```
 
 Migrations run inside the already allocated backend container. Do not use
@@ -26,10 +26,10 @@ After pulling a migration fix on an already-running QA controller, refresh the
 backend image and container before retrying it:
 
 ```sh
-docker compose --env-file disti.env build backend
-docker compose --env-file disti.env up -d --no-deps --force-recreate backend
-docker compose --env-file disti.env exec -T backend python migrate.py
-docker compose --env-file disti.env up -d
+docker compose build backend
+docker compose up -d --no-deps --force-recreate backend
+docker compose exec -T backend python migrate.py
+docker compose up -d
 ```
 
 Migrations run inside the already allocated backend container. Do not use
@@ -42,20 +42,46 @@ ignored by Git and is never replaced by provisioning or rollout. The tracked
 `DOCKER_MQTT_INIT_USERNAME` and `DOCKER_MQTT_INIT_PASSWORD` are the only MQTT
 credentials an operator maintains.
 
-The same file supplies PostgreSQL initialization and every database client.
-Compose maps `DOCKER_POSTGRES_INIT_USERNAME`,
-`DOCKER_POSTGRES_INIT_PASSWORD`, and `POSTGRES_DB` to the TimescaleDB image's
-`POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`; clients use those same
-values and the Docker service hostname `POSTGRES_HOST=postgres`. Always pass
-`--env-file disti.env` to manual Compose commands so Compose can resolve the
-mapping as well as inject the file into containers.
+The same file supplies PostgreSQL initialization and every database client,
+using one canonical contract: `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`,
+and `POSTGRES_PASSWORD`. Compose injects `disti.env` directly into PostgreSQL,
+backend, hardware-agent, watchdog, and Grafana, so normal operator commands do
+not need `--env-file`:
+
+```sh
+docker compose up -d --build
+docker compose down
+docker compose ps
+docker compose logs
+```
+
+`DISTI_ENV_FILE` may select a different device configuration deliberately (the
+rollout tooling uses this for its absolute device-local path); otherwise it
+defaults to `disti.env` in the repository root.
+
+Controllers configured before the canonical naming change require this
+one-time, two-line edit to their existing ignored `disti.env`:
+
+```dotenv
+DOCKER_POSTGRES_INIT_USERNAME=...  -> POSTGRES_USER=...
+DOCKER_POSTGRES_INIT_PASSWORD=...  -> POSTGRES_PASSWORD=...
+```
+
+Keep the values to the right of `=` exactly as they are. `POSTGRES_DB` and
+`POSTGRES_HOST` remain unchanged. Then rebuild and recreate the containers
+without removing the named database volume:
+
+```sh
+docker compose up -d --build --force-recreate
+docker compose exec -T backend python migrate.py
+docker compose ps
+```
 
 PostgreSQL applies initialization variables only when its data directory is
-first initialized. An existing production volume must not be deleted
-automatically. For the current disposable QA installation only, one manual
-removal of `disti_db_data` may be required after stopping the stack if it was
-initialized with the former hard-coded credentials. This destroys that QA
-database; do not run it against data that must be retained.
+first initialized. Renaming these environment keys while preserving their
+values does not reinitialize PostgreSQL and does not require deleting the
+volume. Never add `--volumes` to `docker compose down` for this procedure and
+do not remove `disti_db_data`.
 
 At every broker start, the DISTI Mosquitto entrypoint validates those variables
 and uses `mosquitto_passwd` to create a mode-0600 hashed password file in a

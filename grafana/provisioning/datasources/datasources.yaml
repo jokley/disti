@@ -17,9 +17,9 @@ datasources:
   type: postgres
   url: ${POSTGRES_HOST}:5432
   database: ${POSTGRES_DB}
-  user: ${DOCKER_POSTGRES_INIT_USERNAME}
+  user: ${POSTGRES_USER}
   secureJsonData:
-    password: ${DOCKER_POSTGRES_INIT_PASSWORD}
+    password: ${POSTGRES_PASSWORD}
   jsonData:
     sslmode: "disable" # disable/require/verify-ca/verify-full
     maxOpenConns: 10         # Grafana v5.4+
