@@ -32,6 +32,13 @@ docker compose exec -T backend python migrate.py
 docker compose up -d
 ```
 
+On the ARM64 Pi, rebuild and recreate both Python runtime services with the
+Raspberry hardware overlay (without restarting their dependencies):
+
+```sh
+docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --build --no-deps --force-recreate backend hardware-agent
+```
+
 Migrations run inside the already allocated backend container. Do not use
 `docker compose run` for migrations: this stack assigns static service IPs, so
 an extra one-off backend container can collide with the running backend's IP.

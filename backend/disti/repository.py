@@ -25,12 +25,23 @@ class Repository:
         if url and url.startswith("sqlite:///"):
             path = url.removeprefix("sqlite:///")
             return cls(lambda: sqlite3.connect(path), sqlite=True)
+        required_names = (
+            "POSTGRES_HOST",
+            "POSTGRES_DB",
+            "POSTGRES_USER",
+            "POSTGRES_PASSWORD",
+        )
+        missing = [name for name in required_names if not os.environ.get(name)]
+        if missing:
+            raise RuntimeError(
+                "Missing required PostgreSQL configuration: " + ", ".join(missing)
+            )
         return cls(lambda: psycopg2.connect(
-            host=os.getenv("POSTGRES_HOST", "postgres"),
+            host=os.environ["POSTGRES_HOST"],
             port=os.getenv("POSTGRES_PORT", "5432"),
-            database=os.getenv("POSTGRES_DB", "postgres"),
-            user=os.getenv("POSTGRES_USER", "postgres"),
-            password=os.getenv("POSTGRES_PASSWORD", "postgres")))
+            database=os.environ["POSTGRES_DB"],
+            user=os.environ["POSTGRES_USER"],
+            password=os.environ["POSTGRES_PASSWORD"]))
 
     def _execute(self, sql, params=(), fetch="all"):
         conn = self.connection_factory()

@@ -7,6 +7,8 @@ import subprocess
 
 import pytest
 
+from disti.repository import Repository
+
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE_COMPOSE = (ROOT / "docker-compose.yaml").read_text()
@@ -69,6 +71,7 @@ def test_all_database_consumers_use_canonical_environment_names():
     assert "DOCKER_POSTGRES_INIT_PASSWORD" not in combined
     for name in ("POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"):
         assert name in combined
+        assert f'os.getenv("{name}",' not in combined
 
     for service in ("postgres", "backend", "hardware-agent", "watchdog"):
         match = re.search(rf"^  {re.escape(service)}:\n(.*?)(?=^  \S|\Z)", BASE_COMPOSE,
@@ -86,6 +89,47 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
     assert "POSTGRES_PASSWORD=change-me" in example
     assert "DOCKER_POSTGRES_INIT_" not in example
     assert "disti.env" in (ROOT / ".gitignore").read_text().splitlines()
+
+
+def test_repository_requires_explicit_postgres_configuration(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    for name in ("POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        Repository.from_environment()
+
+    message = str(exc_info.value)
+    assert message.startswith("Missing required PostgreSQL configuration:")
+    for name in ("POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"):
+        assert name in message
+
+
+def test_repository_passes_explicit_postgres_configuration(monkeypatch):
+    values = {
+        "POSTGRES_HOST": "database.internal",
+        "POSTGRES_DB": "disti_qa",
+        "POSTGRES_USER": "hardware_agent",
+        "POSTGRES_PASSWORD": "device-secret",
+    }
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
+    captured = {}
+    monkeypatch.setattr(
+        "disti.repository.psycopg2.connect",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    Repository.from_environment().connection_factory()
+
+    assert captured == {
+        "host": values["POSTGRES_HOST"],
+        "database": values["POSTGRES_DB"],
+        "user": values["POSTGRES_USER"],
+        "password": values["POSTGRES_PASSWORD"],
+        "port": "5432",
+    }
 
 
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker Compose unavailable")

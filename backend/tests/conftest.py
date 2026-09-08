@@ -1,8 +1,15 @@
 import sqlite3
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+
+os.environ.setdefault("POSTGRES_HOST", "test-postgres")
+os.environ.setdefault("POSTGRES_DB", "disti_test")
+os.environ.setdefault("POSTGRES_USER", "disti_test")
+os.environ.setdefault("POSTGRES_PASSWORD", "test-only-password")
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from disti.repository import Repository
