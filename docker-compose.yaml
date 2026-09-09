@@ -6,7 +6,7 @@ services:
     container_name: disti-postgres
     restart: always
     env_file:
-      - .env
+      - disti.env
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
@@ -22,7 +22,7 @@ services:
     container_name: mqtt-broker
     restart: unless-stopped
     env_file:
-      - .env
+      - disti.env
     ports:
       - "1883:1883"
     volumes:
@@ -43,7 +43,7 @@ services:
     ports:
       - "5000:5000"
     env_file:
-      - .env
+      - disti.env
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthz')"]
       interval: 15s
@@ -64,7 +64,7 @@ services:
       postgres:
         condition: service_started
     env_file:
-      - .env
+      - disti.env
     ports:
       - "8081:8081"
     healthcheck:
@@ -86,7 +86,7 @@ services:
       - postgres
       - hardware-agent
     env_file:
-      - .env
+      - disti.env
     environment:
       WATCHDOG_BACKEND_CONTAINER: flask-backend
       WATCHDOG_DATABASE_CONTAINER: disti-postgres
@@ -103,12 +103,7 @@ services:
     image: grafana/grafana:9.2.3
     restart: unless-stopped
     env_file:
-      - .env
-    environment:
-      # Grafana uses GF_* for initialization; deployment credentials retain the
-      # shared DISTI names in the root .env file.
-      GF_SECURITY_ADMIN_USER: ${DOCKER_GRAFANA_INIT_USERNAME:?set DOCKER_GRAFANA_INIT_USERNAME in .env}
-      GF_SECURITY_ADMIN_PASSWORD: ${DOCKER_GRAFANA_INIT_PASSWORD:?set DOCKER_GRAFANA_INIT_PASSWORD in .env}
+      - disti.env
     # depends_on:
     #   - influxdb
     ports:
