@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-: "${DOCKER_MQTT_INIT_USERNAME:?DOCKER_MQTT_INIT_USERNAME must be set in .env}"
-: "${DOCKER_MQTT_INIT_PASSWORD:?DOCKER_MQTT_INIT_PASSWORD must be set in .env}"
+: "${MQTT_USERNAME:?MQTT_USERNAME must be set in disti.env}"
+: "${MQTT_PASSWORD:?MQTT_PASSWORD must be set in disti.env}"
 
 password_dir=/run/mosquitto
 password_file="$password_dir/password.txt"
@@ -20,7 +20,7 @@ find "$password_dir" -maxdepth 1 -type f -name '.password.txt.*' -delete
 temporary_file="$(mktemp "$password_dir/.password.txt.XXXXXX")"
 trap 'rm -f "$temporary_file"' EXIT HUP INT TERM
 mosquitto_passwd -b -c "$temporary_file" \
-  "$DOCKER_MQTT_INIT_USERNAME" "$DOCKER_MQTT_INIT_PASSWORD"
+  "$MQTT_USERNAME" "$MQTT_PASSWORD"
 chown "$runtime_uid:$runtime_gid" "$temporary_file"
 chmod 0600 "$temporary_file"
 mv -f "$temporary_file" "$password_file"

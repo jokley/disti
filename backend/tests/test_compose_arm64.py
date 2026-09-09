@@ -47,7 +47,7 @@ def test_documented_migration_rebuilds_and_uses_running_backend():
 def test_postgres_compose_uses_canonical_device_environment():
     postgres = BASE_COMPOSE.split("  mqtt:", 1)[0]
 
-    assert "- .env" in postgres
+    assert "- disti.env" in postgres
     assert "environment:" not in postgres
     assert "url: ${POSTGRES_HOST}:5432" in GRAFANA_DATASOURCE
     assert "database: ${POSTGRES_DB}" in GRAFANA_DATASOURCE
@@ -73,22 +73,80 @@ def test_all_database_consumers_use_canonical_environment_names():
         assert name in combined
         assert f'os.getenv("{name}",' not in combined
 
-    for service in ("postgres", "backend", "hardware-agent", "watchdog"):
+    for service in ("postgres", "mqtt", "backend", "hardware-agent", "watchdog", "grafana"):
         match = re.search(rf"^  {re.escape(service)}:\n(.*?)(?=^  \S|\Z)", BASE_COMPOSE,
                           flags=re.MULTILINE | re.DOTALL)
         assert match is not None
         section = match.group(1)
-        assert "- .env" in section
+        assert "- disti.env" in section
 
 
 def test_example_environment_is_safe_and_local_environment_is_ignored():
-    example = (ROOT / ".env.example").read_text()
+    example = (ROOT / "disti.env.example").read_text()
     assert "POSTGRES_HOST=postgres" in example
     assert "POSTGRES_DB=jokley" in example
     assert "POSTGRES_USER=jokley" in example
     assert "POSTGRES_PASSWORD=change-me" in example
-    assert "DOCKER_POSTGRES_INIT_" not in example
-    assert ".env" in (ROOT / ".gitignore").read_text().splitlines()
+    canonical = {
+        "POSTGRES_HOST": "postgres",
+        "POSTGRES_DB": "jokley",
+        "POSTGRES_USER": "jokley",
+        "POSTGRES_PASSWORD": "change-me",
+        "GF_SECURITY_ADMIN_USER": "jokley",
+        "GF_SECURITY_ADMIN_PASSWORD": "change-me",
+        "MQTT_USERNAME": "jokley",
+        "MQTT_PASSWORD": "change-me",
+        "DISTI_HARDWARE_MODE": "mock",
+        "DISTI_POLL_INTERVAL_SECONDS": "2",
+        "DISTI_HARDWARE_HEALTH_PORT": "8081",
+        "DISTI_HARDWARE_HEALTH_URL": "http://hardware-agent:8081",
+        "DISTI_HARDWARE_MAX_AGE_SEC": "30",
+        "WATCHDOG_CHECK_INTERVAL_SEC": "30",
+        "WATCHDOG_BACKEND_RECHECK_SEC": "2",
+        "WATCHDOG_RECOVERY_WAIT_SEC": "30",
+        "WATCHDOG_COOLDOWN_SEC": "120",
+        "WATCHDOG_MAX_RESTARTS_PER_HOUR": "4",
+        "WATCHDOG_BACKEND_RETRIES": "3",
+        "WATCHDOG_ALERT_COOLDOWN_SEC": "900",
+        "DISTI_REPLAY_RUN_ID": "",
+        "DISTI_REPLAY_SPEED": "1",
+        "DISTI_REPLAY_PRESERVE_TIMING": "true",
+    }
+    values = dict(line.split("=", 1) for line in example.splitlines()
+                  if line and not line.startswith("#"))
+    assert values == canonical
+    assert set(values.values()) <= {"postgres", "jokley", "change-me", "mock", "2", "8081",
+                                    "http://hardware-agent:8081", "30", "120", "4", "3", "900",
+                                    "", "1", "true"}
+    ignored = (ROOT / ".gitignore").read_text().splitlines()
+    for path in ("disti.env", ".env", ".disti-local/", "mosquitto/password.txt",
+                 "nginx/.htpasswd", "piTerminal/client-configs/"):
+        assert path in ignored
+    assert not (ROOT / ".env.example").exists()
+    assert subprocess.run(["git", "check-ignore", "--quiet", "disti.env"], cwd=ROOT).returncode == 0
+    tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, text=True,
+                             capture_output=True, check=True).stdout.splitlines()
+    assert "disti.env.example" in tracked
+    assert ".env.example" not in tracked
+
+
+
+def test_compose_has_no_credential_interpolation_or_legacy_names():
+    legacy_names = (
+        "DOCKER_POSTGRES_INIT_USERNAME", "DOCKER_POSTGRES_INIT_PASSWORD",
+        "DOCKER_GRAFANA_INIT_USERNAME", "DOCKER_GRAFANA_INIT_PASSWORD",
+        "DOCKER_MQTT_INIT_USERNAME", "DOCKER_MQTT_INIT_PASSWORD",
+    )
+    runtime_files = [
+        ROOT / "docker-compose.yaml", ROOT / "disti.env.example",
+        ROOT / "mosquitto/docker-entrypoint-disti.sh", ROOT / "telegraf/telegraf.conf",
+        ROOT / "piTerminal/setup_rollout.sh", ROOT / "piTerminal/rollout/disti-update",
+    ]
+    combined = "\n".join(path.read_text() for path in runtime_files)
+    assert all(name not in combined for name in legacy_names)
+    assert "DISTI_ENV_FILE" not in combined
+    assert not re.search(r"\$\{[^}]*?(?:PASSWORD|USERNAME|USER)[^}]*}", BASE_COMPOSE)
+    assert "GF_SECURITY_ADMIN_USER" not in BASE_COMPOSE.split("environment:")[-1]
 
 
 def test_repository_requires_explicit_postgres_configuration(monkeypatch):
@@ -136,7 +194,7 @@ def test_repository_passes_explicit_postgres_configuration(monkeypatch):
 def test_compose_config_injects_root_environment_without_env_file_flag(tmp_path):
     compose = tmp_path / "docker-compose.yaml"
     compose.write_text(BASE_COMPOSE)
-    (tmp_path / ".env").write_text((ROOT / ".env.example").read_text())
+    (tmp_path / "disti.env").write_text((ROOT / "disti.env.example").read_text())
     result = subprocess.run(
         ["docker", "compose", "-f", str(compose), "config"],
         cwd=tmp_path,
@@ -164,8 +222,8 @@ def test_mqtt_credentials_generate_an_untracked_password_file_at_startup():
     mosquitto_config = (ROOT / "mosquitto/mosquitto.conf").read_text()
 
     assert "env_file:" in BASE_COMPOSE
-    assert "DOCKER_MQTT_INIT_USERNAME" in entrypoint
-    assert "DOCKER_MQTT_INIT_PASSWORD" in entrypoint
+    assert "MQTT_USERNAME" in entrypoint
+    assert "MQTT_PASSWORD" in entrypoint
     assert "mosquitto_passwd -b -c \"$temporary_file\"" in entrypoint
     assert "mktemp" in entrypoint
     assert "mv -f \"$temporary_file\" \"$password_file\"" in entrypoint
@@ -198,8 +256,8 @@ def test_mqtt_password_initialization_is_restart_safe_and_does_not_leak(tmp_path
     passwd.chmod(0o755)
     env = os.environ | {
         "PATH": f"{binaries}:{os.environ['PATH']}",
-        "DOCKER_MQTT_INIT_USERNAME": "qa-user",
-        "DOCKER_MQTT_INIT_PASSWORD": "plaintext-secret",
+        "MQTT_USERNAME": "qa-user",
+        "MQTT_PASSWORD": "plaintext-secret",
     }
 
     first = subprocess.run([script], env=env, text=True, capture_output=True)

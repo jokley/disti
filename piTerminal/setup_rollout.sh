@@ -15,12 +15,12 @@ install -o root -g root -m0755 "$SCRIPT_DIR/rollout/disti-update" "$RUNTIME_SCRI
 install -o root -g root -m0644 "$SCRIPT_DIR/rollout/disti-update.service" /etc/systemd/system/disti-update.service
 install -o root -g root -m0644 "$SCRIPT_DIR/rollout/disti-update.timer" /etc/systemd/system/disti-update.timer
 sed -i -e "s/^User=.*/User=$DISTI_USER/" -e "s/^Group=.*/Group=$GROUP/" /etc/systemd/system/disti-update.service
-if [[ ! -e "$REPO_DIR/.env" ]]; then
-  [[ -f "$REPO_DIR/.env.example" ]] || fail "Missing .env.example"
-  install -o "$DISTI_USER" -g "$GROUP" -m0600 "$REPO_DIR/.env.example" "$REPO_DIR/.env"
-  log "Created $REPO_DIR/.env; replace placeholder credentials before starting DISTI"
+if [[ ! -e "$REPO_DIR/disti.env" ]]; then
+  [[ -f "$REPO_DIR/disti.env.example" ]] || fail "Missing disti.env.example"
+  install -o "$DISTI_USER" -g "$GROUP" -m0600 "$REPO_DIR/disti.env.example" "$REPO_DIR/disti.env"
+  log "Created $REPO_DIR/disti.env; replace placeholder credentials before starting DISTI"
 else
-  log "Preserving $REPO_DIR/.env"
+  log "Preserving $REPO_DIR/disti.env"
 fi
 if [[ ! -e $CONFIG_FILE || $REPLACE_CONFIG == true ]];then cat >"$CONFIG_FILE" <<CFG
 DISTI_DIR="$REPO_DIR"
