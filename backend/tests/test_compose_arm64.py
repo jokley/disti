@@ -101,6 +101,13 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
         "DISTI_HARDWARE_HEALTH_PORT": "8081",
         "DISTI_HARDWARE_HEALTH_URL": "http://hardware-agent:8081",
         "DISTI_HARDWARE_MAX_AGE_SEC": "30",
+        "DISTI_ADC_TYPE": "ads1115",
+        "DISTI_I2C_BUS": "1",
+        "DISTI_ADS1115_ADDRESS": "0x48",
+        "DISTI_ADS1115_EC_CHANNEL": "0",
+        "DISTI_ADS1115_PT1000_CHANNEL": "1",
+        "DISTI_ADS1115_GAIN": "1",
+        "DISTI_ADS1115_DATA_RATE": "128",
         "WATCHDOG_CHECK_INTERVAL_SEC": "30",
         "WATCHDOG_BACKEND_RECHECK_SEC": "2",
         "WATCHDOG_RECOVERY_WAIT_SEC": "30",
@@ -117,7 +124,7 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
     assert values == canonical
     assert set(values.values()) <= {"postgres", "jokley", "change-me", "mock", "2", "8081",
                                     "http://hardware-agent:8081", "30", "120", "4", "3", "900",
-                                    "", "1", "true"}
+                                    "", "0", "0x48", "ads1115", "128", "1", "true"}
     ignored = (ROOT / ".gitignore").read_text().splitlines()
     for path in ("disti.env", ".env", ".disti-local/", "mosquitto/password.txt",
                  "nginx/.htpasswd", "piTerminal/client-configs/"):

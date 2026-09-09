@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import math
+import os
+from pathlib import Path
 import time
 
 
@@ -88,8 +90,62 @@ class ReplaySensorReader(SensorReader):
 
 
 class RaspberrySensorReader(SensorReader):
+    """Configured Raspberry provider; ADS details remain behind ADCReader."""
+    def __init__(self, adc=None, adc_factory=None):
+        self.bus = int(os.getenv("DISTI_I2C_BUS", "1"))
+        self.address = os.getenv("DISTI_ADS1115_ADDRESS", "0x48")
+        self.channels = [
+            ("ec-1", "ec", int(os.getenv("DISTI_ADS1115_EC_CHANNEL", "0"))),
+            ("ec-temp", "temperature", int(os.getenv("DISTI_ADS1115_PT1000_CHANNEL", "1"))),
+        ]
+        if os.getenv("DISTI_ADC_TYPE", "ads1115").lower() != "ads1115":
+            raise ValueError("unsupported DISTI_ADC_TYPE (expected ads1115)")
+        self._factory = adc_factory
+        self.adc = adc
+        self.last_successful_read = None
+        self.last_error = None
+        if self.adc is None:
+            try:
+                self._initialize_adc()
+            except Exception as exc:
+                self.last_error = str(exc)
+
+    def _initialize_adc(self):
+        if self._factory is None:
+            from .ads1115 import ADS1115Reader
+            self._factory = ADS1115Reader
+        self.adc = self._factory(bus=self.bus, address=self.address,
+                                 gain=float(os.getenv("DISTI_ADS1115_GAIN", "1")),
+                                 data_rate=int(os.getenv("DISTI_ADS1115_DATA_RATE", "128")))
+
     def read(self):
-        raise NotImplementedError("Install configured ADS1115/DS2482 providers before enabling raspberry mode")
+        if self.adc is None:
+            self._initialize_adc()
+        readings = []
+        try:
+            stamp = datetime.now(timezone.utc)
+            for sensor_id, measurement_type, channel in self.channels:
+                sample = self.adc.read_channel(channel)
+                readings.append(SensorReading(
+                    sensor_id, measurement_type, sample.raw_mv, "mV", timestamp=stamp,
+                    raw_value=sample.raw_count, raw_mv=sample.raw_mv,
+                    metadata={"adc_type": "ads1115", "channel": channel,
+                              "engineering_conversion": "not_configured"}))
+            self.last_successful_read, self.last_error = stamp, None
+            return readings
+        except Exception as exc:
+            self.last_error = str(exc)
+            raise
+
+    def health(self):
+        return {
+            "mode": "raspberry",
+            "i2c_available": self.adc is not None or Path(f"/dev/i2c-{self.bus}").exists(),
+            "ads1115_reachable": bool(self.adc and getattr(self.adc, "reachable", True)),
+            "acquisition_running": self.last_successful_read is not None,
+            "last_successful_read": self.last_successful_read.isoformat() if self.last_successful_read else None,
+            "last_error": self.last_error,
+        }
 
 
 class MockFractionCollector(FractionCollector):

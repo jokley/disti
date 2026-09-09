@@ -15,7 +15,13 @@ class Agent:
         self.interval = float(interval or os.getenv("DISTI_POLL_INTERVAL_SECONDS", "2"))
         self.reader = reader or self._reader_from_environment()
         self.manager = HardwareManager([self.reader])
-        self.status = {"status": "starting", "last_read_at": None, "last_error": None}
+        self.status = {"status": "starting", "mode": os.getenv("DISTI_HARDWARE_MODE", "mock"),
+                       "last_read_at": None, "last_error": None}
+
+    def _update_reader_health(self):
+        health = getattr(self.reader, "health", None)
+        if health:
+            self.status.update(health())
 
     def _reader_from_environment(self):
         mode = os.getenv("DISTI_HARDWARE_MODE", "mock")
@@ -33,6 +39,7 @@ class Agent:
             self.repository.ensure_sensor(reading.sensor_id, reading.sensor_id, reading.measurement_type)
             self.repository.save_measurement(reading, run["id"] if run else None)
         self.status.update(status="healthy", last_read_at=time.time(), last_error=None)
+        self._update_reader_health()
 
     def run(self):
         delay = self.interval
@@ -43,6 +50,7 @@ class Agent:
                 self.status["status"] = "replay-complete"; return
             except Exception as exc:  # process must survive transient bus/database failures
                 self.status.update(status="degraded", last_error=str(exc))
+                self._update_reader_health()
                 delay = min(max(delay * 2, 1), 30)
             time.sleep(delay)
 

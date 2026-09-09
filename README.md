@@ -112,9 +112,64 @@ committing an `.htpasswd`.
 * **replay**: set `DISTI_HARDWARE_MODE=replay` and `DISTI_REPLAY_RUN_ID` to a
   recorded run UUID. `DISTI_REPLAY_SPEED=10` runs ten times faster; set
   `DISTI_REPLAY_PRESERVE_TIMING=false` to emit as quickly as possible.
-* **raspberry**: currently an intentional provider stub. Once drivers exist,
-  start with the `docker-compose.raspberry.yaml` overlay. Only hardware-agent
-  receives `/dev/i2c-1`; the rest of the stack is not privileged.
+* **raspberry**: set `DISTI_HARDWARE_MODE=raspberry` to use the ADS1115 adapter,
+  then start with the `docker-compose.raspberry.yaml` overlay. Only
+  hardware-agent receives `/dev/i2c-1`; the rest of the stack is not privileged.
+
+### ADS1115 Raspberry configuration and validation
+
+The first two single-ended inputs are configured as follows: ADS1115 A0 is
+`ec-1` (`ec`) from the DFRobot EC conversion board, and A1 is `ec-temp`
+(`temperature`) from its separate PT1000 conversion board. A2 and A3 remain
+electrically available but unassigned. DISTI stores the signed ADC count and
+uncalibrated millivolts for both inputs. Because no validated EC or PT1000
+formula exists yet, `value` is also the raw millivolt signal with unit `mV`,
+and metadata explicitly says that engineering conversion is not configured.
+Calibration and temperature compensation must remain downstream.
+
+The device-local settings are:
+
+```dotenv
+DISTI_ADC_TYPE=ads1115
+DISTI_I2C_BUS=1
+DISTI_ADS1115_ADDRESS=0x48
+DISTI_ADS1115_EC_CHANNEL=0
+DISTI_ADS1115_PT1000_CHANNEL=1
+DISTI_ADS1115_GAIN=1
+DISTI_ADS1115_DATA_RATE=128
+```
+
+Gain 1 (±4.096 V full scale) and 128 samples/second are conservative initial
+defaults, not final electrical design choices. Confirm that the conversion
+boards' full output range cannot exceed the selected PGA range, and confirm
+noise/settling at the installed sample rate, before physical sign-off. The
+configured address is authoritative; `0x48` is merely the expected address
+when ADS1115 ADDR is tied to ground. Use a common ground and appropriate I2C
+level adaptation; connect EC analog output to A0 and PT1000-board analog output
+to A1. Never apply an analog input outside ADS1115 supply/absolute limits.
+
+On the Pi, enable I2C and validate the host before starting DISTI:
+
+```sh
+ls -l /dev/i2c-*
+sudo apt-get install -y i2c-tools              # if i2cdetect is absent
+i2cdetect -y 1                                 # expect 48 unless configured otherwise
+nano disti.env                                 # change mock to raspberry; confirm ADC settings
+docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --build
+curl http://127.0.0.1:8081/healthz
+docker compose logs --tail=100 hardware-agent
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT time,sensor_id,measurement_type,raw_value,raw_mv,value,unit,quality,metadata FROM sensor_measurements WHERE sensor_id IN ('ec-1','ec-temp') ORDER BY time DESC LIMIT 10;"
+```
+
+Run the `psql` command from a shell where the device-local values have been
+exported, or substitute its configured database/user values. Healthy Raspberry
+status reports I2C availability, ADS1115 reachability, acquisition state, and
+the last successful read. A missing bus/device or transient read changes health
+to degraded with `last_error`; the process backs off and retries, and the ADC
+adapter reopens the bus after a read error rather than requiring a stack restart.
+To return to simulation, set `DISTI_HARDWARE_MODE=mock` and start normal base
+Compose with `docker compose up -d --build` (without the Raspberry overlay).
 
 The agent's health endpoint is `http://127.0.0.1:8081/healthz` on the host and
 `http://hardware-agent:8081/healthz` inside Compose; backend health is
@@ -165,9 +220,8 @@ MQTT coupling.
 
 ## Remaining physical hardware work
 
-Implement and bench-test concrete `ADCReader`, `TemperatureProvider`, and
-`FractionCollector` adapters for ADS1115, DS2482-100/PT1000 and the selected I2C
-stepper controller. Confirm gain/reference voltage, EC compensation/model,
+Bench-test the ADS1115 adapter and implement concrete `TemperatureProvider` and
+`FractionCollector` adapters for later hardware. Confirm gain/reference voltage, EC compensation/model,
 1-Wire topology, I2C addresses, HOME interlocks, position limits, recovery after
 brownouts, and Raspberry group/device permissions before enabling raspberry
 mode. Mock and replay modes intentionally make none of these assumptions.
