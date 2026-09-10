@@ -108,6 +108,12 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
         "DISTI_ADS1115_PT1000_CHANNEL": "1",
         "DISTI_ADS1115_GAIN": "1",
         "DISTI_ADS1115_DATA_RATE": "128",
+        "DISTI_ONEWIRE_TYPE": "ds2482",
+        "DISTI_DS2482_I2C_BUS": "1",
+        "DISTI_DS2482_ADDRESS": "0x18",
+        "DISTI_ONEWIRE_VAPOR_ID": "",
+        "DISTI_ONEWIRE_COOLER_ID": "",
+        "DISTI_ONEWIRE_RESERVE_ID": "",
         "WATCHDOG_CHECK_INTERVAL_SEC": "30",
         "WATCHDOG_BACKEND_RECHECK_SEC": "2",
         "WATCHDOG_RECOVERY_WAIT_SEC": "30",
@@ -124,7 +130,8 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
     assert values == canonical
     assert set(values.values()) <= {"postgres", "jokley", "change-me", "mock", "2", "8081",
                                     "http://hardware-agent:8081", "30", "120", "4", "3", "900",
-                                    "", "0", "0x48", "ads1115", "128", "1", "true"}
+                                    "", "0", "0x48", "0x18", "ads1115", "ds2482",
+                                    "128", "1", "true"}
     ignored = (ROOT / ".gitignore").read_text().splitlines()
     for path in ("disti.env", ".env", ".disti-local/", "mosquitto/password.txt",
                  "nginx/.htpasswd", "piTerminal/client-configs/"):
