@@ -34,7 +34,7 @@ def test_backend_is_rechecked_and_restart_budget_is_enforced(monkeypatch):
     client = Client(); clock = [1000]
     watchdog = module.Watchdog(client=client, http=HTTP([False, False]), clock=lambda: clock[0], sleep=lambda _: None)
     watchdog.check()
-    assert client.get("flask-backend").restarts == 1
-    assert watchdog.can_restart("flask-backend") is False
+    assert client.get("disti-api").restarts == 1
+    assert watchdog.can_restart("disti-api") is False
     watchdog.restarts.extend([900, 901, 902])
     assert watchdog.can_restart("another") is False

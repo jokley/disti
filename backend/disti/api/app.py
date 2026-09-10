@@ -1,7 +1,7 @@
 """DISTI Flask application.
 
 The web process exposes control APIs only. Continuous acquisition lives in
-``hardware_agent.py`` so restarting gunicorn never interrupts measurements.
+``entrypoints.hardware_agent`` so restarting gunicorn never interrupts measurements.
 """
 from datetime import datetime, timezone
 import os
@@ -143,10 +143,3 @@ def create_app(repository=None):
                        update_channel=os.getenv("DISTI_UPDATE_BRANCH", "dev"))
 
     return app
-
-
-app = create_app()
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)

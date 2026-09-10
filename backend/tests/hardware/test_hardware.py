@@ -3,7 +3,7 @@ from threading import Thread
 from urllib.request import urlopen
 
 from disti.hardware import MockFractionCollector, MockSensorReader, ReplaySensorReader
-from hardware_agent import Agent, make_health_server
+from entrypoints.hardware_agent import Agent, make_health_server
 
 
 def test_mock_data_is_deterministic_and_keeps_ec_raw_values():

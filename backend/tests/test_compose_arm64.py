@@ -28,6 +28,14 @@ def test_compose_has_no_legacy_architecture_or_frontend_references():
     assert "next-frontend" not in combined
     assert "location /next/" not in NGINX_CONFIG
     assert "frontend:" not in BASE_COMPOSE
+    for legacy in ("flask-backend", "example-network", "mqtt-broker"):
+        assert legacy not in combined
+    assert "  api:" in BASE_COMPOSE
+    assert "container_name: disti-api" in BASE_COMPOSE
+    assert "container_name: disti-mqtt" in BASE_COMPOSE
+    assert "container_name: disti-grafana" in BASE_COMPOSE
+    assert "container_name: disti-nginx" in BASE_COMPOSE
+    assert "disti-network" in BASE_COMPOSE
 
 
 def test_compose_uses_portable_multi_arch_images():
@@ -39,9 +47,9 @@ def test_compose_uses_portable_multi_arch_images():
 
 
 def test_documented_migration_rebuilds_and_uses_running_backend():
-    assert "up -d --build postgres backend" in README
-    assert "exec -T backend python migrate.py" in README
-    assert "run --rm backend python migrate.py" not in README
+    assert "up -d --build postgres api" in README
+    assert "exec -T api python -m entrypoints.migrate" in README
+    assert "run --rm api python -m entrypoints.migrate" not in README
 
 
 def test_postgres_compose_uses_canonical_device_environment():
@@ -59,8 +67,8 @@ def test_all_database_consumers_use_canonical_environment_names():
     runtime_files = [
         ROOT / "docker-compose.yaml",
         ROOT / "backend/disti/repository.py",
-        ROOT / "backend/hardware_agent.py",
-        ROOT / "backend/migrate.py",
+        ROOT / "backend/entrypoints/hardware_agent.py",
+        ROOT / "backend/entrypoints/migrate.py",
         ROOT / "watchdog/watchdog.py",
         ROOT / "grafana/provisioning/datasources/datasources.yaml",
         ROOT / "piTerminal/rollout/disti-update",
@@ -73,7 +81,7 @@ def test_all_database_consumers_use_canonical_environment_names():
         assert name in combined
         assert f'os.getenv("{name}",' not in combined
 
-    for service in ("postgres", "mqtt", "backend", "hardware-agent", "watchdog", "grafana"):
+    for service in ("postgres", "mqtt", "api", "hardware-agent", "watchdog", "grafana"):
         match = re.search(rf"^  {re.escape(service)}:\n(.*?)(?=^  \S|\Z)", BASE_COMPOSE,
                           flags=re.MULTILINE | re.DOTALL)
         assert match is not None
@@ -153,7 +161,7 @@ def test_compose_has_no_credential_interpolation_or_legacy_names():
     )
     runtime_files = [
         ROOT / "docker-compose.yaml", ROOT / "disti.env.example",
-        ROOT / "mosquitto/docker-entrypoint-disti.sh", ROOT / "telegraf/telegraf.conf",
+        ROOT / "mosquitto/docker-entrypoint-disti.sh",
         ROOT / "piTerminal/setup_rollout.sh", ROOT / "piTerminal/rollout/disti-update",
     ]
     combined = "\n".join(path.read_text() for path in runtime_files)
@@ -295,3 +303,20 @@ def test_raspberry_device_access_is_hardware_agent_only():
     assert RASPBERRY_COMPOSE.count("/dev/i2c-1:/dev/i2c-1") == 1
     assert RASPBERRY_COMPOSE.splitlines()[2].strip() == "hardware-agent:"
     assert "privileged:" not in BASE_COMPOSE + RASPBERRY_COMPOSE
+
+
+def test_runtime_structure_and_grafana_have_no_removed_legacy_dependencies():
+    tracked_runtime = "\n".join(
+        (ROOT / path).read_text(errors="ignore")
+        for path in ("docker-compose.yaml", "docker-compose.raspberry.yaml",
+                     "disti.env.example", "README.md",
+                     "grafana/provisioning/datasources/datasources.yaml")
+    ).lower()
+    assert not (ROOT / "influxdb").exists()
+    assert not (ROOT / "telegraf").exists()
+    assert "influxdb" not in tracked_runtime
+    assert "telegraf" not in tracked_runtime
+    assert "type: postgres" in GRAFANA_DATASOURCE
+    assert "timescaledb: true" in GRAFANA_DATASOURCE
+    assert (ROOT / "backend/entrypoints/api.py").exists()
+    assert (ROOT / "backend/entrypoints/hardware_agent.py").exists()

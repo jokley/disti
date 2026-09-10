@@ -1,5 +1,5 @@
 from disti.mock_scenario import RUN_ID, build_mock_scenario
-from seed_mock_run import seed
+from entrypoints.seed_mock_run import seed
 
 
 def test_complete_mock_scenario_is_repeatable():

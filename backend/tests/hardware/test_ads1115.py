@@ -1,8 +1,8 @@
 import pytest
 
-from disti.ads1115 import ADS1115Error, ADS1115Reader
+from disti.hardware.adc.ads1115 import ADS1115Error, ADS1115Reader
 from disti.hardware import RaspberrySensorReader
-from hardware_agent import Agent
+from entrypoints.hardware_agent import Agent
 
 
 def ads_word(raw):

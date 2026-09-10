@@ -7,8 +7,8 @@ LOG=logging.getLogger("disti-watchdog")
 class Watchdog:
  def __init__(self, client=None, http=requests, clock=time.monotonic, sleep=time.sleep):
   self.client=client or docker.from_env();self.http=http;self.clock=clock;self.sleep=sleep;self.last_restart={};self.restarts=deque();self.last_alert={}
-  self.backend=os.getenv("WATCHDOG_BACKEND_CONTAINER","flask-backend");self.database=os.getenv("WATCHDOG_DATABASE_CONTAINER","disti-postgres");self.hardware=os.getenv("WATCHDOG_HARDWARE_CONTAINER","disti-hardware-agent")
-  self.health=os.getenv("WATCHDOG_BACKEND_HEALTH_URL","http://backend:5000/healthz");self.status=os.getenv("WATCHDOG_STATUS_URL","http://backend:5000/watchdog/status")
+  self.backend=os.getenv("WATCHDOG_BACKEND_CONTAINER","disti-api");self.database=os.getenv("WATCHDOG_DATABASE_CONTAINER","disti-postgres");self.hardware=os.getenv("WATCHDOG_HARDWARE_CONTAINER","disti-hardware-agent")
+  self.health=os.getenv("WATCHDOG_BACKEND_HEALTH_URL","http://api:5000/healthz");self.status=os.getenv("WATCHDOG_STATUS_URL","http://api:5000/watchdog/status")
   self.cooldown=int(os.getenv("WATCHDOG_COOLDOWN_SEC","120"));self.budget=int(os.getenv("WATCHDOG_MAX_RESTARTS_PER_HOUR","4"));self.recheck=int(os.getenv("WATCHDOG_BACKEND_RECHECK_SEC","2"));self.recovery=int(os.getenv("WATCHDOG_RECOVERY_WAIT_SEC","30"));self.retries=int(os.getenv("WATCHDOG_BACKEND_RETRIES","3"));self.alert_cooldown=int(os.getenv("WATCHDOG_ALERT_COOLDOWN_SEC","900"))
  def get(self,url): return self.http.get(url,timeout=10)
  def healthy(self):
