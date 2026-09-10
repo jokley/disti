@@ -65,6 +65,10 @@ services:
         condition: service_started
     env_file:
       - disti.env
+    environment:
+      DISTI_HARDWARE_MODE: raspberry
+    devices:
+      - /dev/i2c-1:/dev/i2c-1
     ports:
       - "8081:8081"
     healthcheck:

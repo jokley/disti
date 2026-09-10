@@ -8,15 +8,13 @@ load_config(){
   [[ -r "$CONFIG_FILE" ]] || fail "Configuration missing or unreadable: $CONFIG_FILE"
   # shellcheck source=/dev/null
   source "$CONFIG_FILE"
-  : "${DISTI_DIR:?DISTI_DIR missing}" "${DEPLOY_BRANCH:?DEPLOY_BRANCH missing}" "${COMPOSE_PROFILE:?COMPOSE_PROFILE missing}" "${HEALTH_URL:?HEALTH_URL missing}"
+  : "${DISTI_DIR:?DISTI_DIR missing}" "${DEPLOY_BRANCH:?DEPLOY_BRANCH missing}" "${HEALTH_URL:?HEALTH_URL missing}"
   HEALTH_RETRIES="${HEALTH_RETRIES:-12}"; HEALTH_SLEEP_SEC="${HEALTH_SLEEP_SEC:-10}"; COMPOSE_WAIT_TIMEOUT_SEC="${COMPOSE_WAIT_TIMEOUT_SEC:-180}"
   case "$DEPLOY_BRANCH" in qa|main);; *) fail "Unsupported DEPLOY_BRANCH: $DEPLOY_BRANCH (allowed: qa, main)";; esac
-  case "$COMPOSE_PROFILE" in base|raspberry);; *) fail "Unsupported COMPOSE_PROFILE: $COMPOSE_PROFILE";; esac
   [[ "$HEALTH_RETRIES" =~ ^[0-9]+$ && "$HEALTH_SLEEP_SEC" =~ ^[0-9]+$ && "$COMPOSE_WAIT_TIMEOUT_SEC" =~ ^[0-9]+$ ]] || fail "Timeout and retry values must be integers"
   [[ -r "$DISTI_DIR/disti.env" ]] || fail "Device configuration missing or unreadable: $DISTI_DIR/disti.env"
 }
-compose_args(){ COMPOSE_ARGS=(-f docker-compose.yaml); if [[ "$COMPOSE_PROFILE" == raspberry ]]; then COMPOSE_ARGS+=(-f docker-compose.raspberry.yaml); fi; }
-run_compose(){ docker compose "${COMPOSE_ARGS[@]}" "$@"; }
+run_compose(){ docker compose "$@"; }
 wait_for_health(){ local attempt; for ((attempt=1;attempt<=HEALTH_RETRIES;attempt++)); do
   if curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" >/dev/null; then log "Health check passed: $HEALTH_URL"; return 0; fi
   log "Health check not ready ($attempt/$HEALTH_RETRIES)"; sleep "$HEALTH_SLEEP_SEC"; done; return 1; }
@@ -27,7 +25,6 @@ load_config
 exec 9>"$LOCK_FILE"; if ! flock -n 9; then log "Another rollout is running; exiting"; exit 0; fi
 cd "$DISTI_DIR"; git rev-parse --is-inside-work-tree >/dev/null || fail "$DISTI_DIR is not a Git repository"
 if ! git diff --quiet || ! git diff --cached --quiet; then fail "Tracked local changes found; rollout aborted"; fi
-compose_args
 log "Checking origin/$DEPLOY_BRANCH"
 git fetch --prune origin "+refs/heads/${DEPLOY_BRANCH}:refs/remotes/origin/${DEPLOY_BRANCH}"
 LOCAL_COMMIT="$(git rev-parse HEAD)"; REMOTE_COMMIT="$(git rev-parse "origin/$DEPLOY_BRANCH")"

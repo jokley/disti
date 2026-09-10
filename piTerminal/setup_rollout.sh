@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-DISTI_USER="${DISTI_USER:-pi}"; DEPLOY_BRANCH=main; COMPOSE_PROFILE=raspberry; REPLACE_CONFIG=false
+DISTI_USER="${DISTI_USER:-pi}"; DEPLOY_BRANCH=main; REPLACE_CONFIG=false
 CONFIG_FILE=/etc/disti-update.conf; RUNTIME_SCRIPT=/usr/local/sbin/disti-update
 log(){ printf '%s %s\n' "$(date --iso-8601=seconds)" "$*"; }; fail(){ log "ERROR: $*" >&2; exit 1; }
-usage(){ echo "Usage: sudo $0 [--branch qa|main] [--compose-profile base|raspberry] [--replace-config]"; }
-while (($#)); do case "$1" in --branch) DEPLOY_BRANCH="${2:?}";shift 2;; --compose-profile) COMPOSE_PROFILE="${2:?}";shift 2;; --replace-config) REPLACE_CONFIG=true;shift;; -h|--help) usage;exit;; *) fail "Unknown argument: $1";; esac; done
-[[ $EUID -eq 0 ]] || fail "Run with sudo"; case "$DEPLOY_BRANCH" in qa|main);;*) fail "Branch must be qa or main";;esac; case "$COMPOSE_PROFILE" in base|raspberry);;*) fail "Compose profile must be base or raspberry";;esac
+usage(){ echo "Usage: sudo $0 [--branch qa|main] [--replace-config]"; }
+while (($#)); do case "$1" in --branch) DEPLOY_BRANCH="${2:?}";shift 2;; --replace-config) REPLACE_CONFIG=true;shift;; -h|--help) usage;exit;; *) fail "Unknown argument: $1";; esac; done
+[[ $EUID -eq 0 ]] || fail "Run with sudo"; case "$DEPLOY_BRANCH" in qa|main);;*) fail "Branch must be qa or main";;esac
 id "$DISTI_USER" >/dev/null 2>&1 || fail "User does not exist: $DISTI_USER"
 GROUP=$(id -gn "$DISTI_USER"); HOME_DIR=$(getent passwd "$DISTI_USER"|cut -d: -f6); SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"&&pwd); REPO_DIR=$(cd "$SCRIPT_DIR/.."&&pwd)
 for f in "$SCRIPT_DIR/rollout/disti-update" "$SCRIPT_DIR/rollout/disti-update.service" "$SCRIPT_DIR/rollout/disti-update.timer"; do [[ -f $f ]]||fail "Missing $f";done
@@ -25,7 +25,6 @@ fi
 if [[ ! -e $CONFIG_FILE || $REPLACE_CONFIG == true ]];then cat >"$CONFIG_FILE" <<CFG
 DISTI_DIR="$REPO_DIR"
 DEPLOY_BRANCH="$DEPLOY_BRANCH"
-COMPOSE_PROFILE="$COMPOSE_PROFILE"
 HEALTH_URL="http://127.0.0.1:5000/healthz"
 HEALTH_RETRIES="12"
 HEALTH_SLEEP_SEC="10"
