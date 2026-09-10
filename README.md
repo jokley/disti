@@ -5,30 +5,57 @@ Mosquitto and nginx. Local I2C acquisition is deliberately isolated in the
 `hardware-agent`; MQTT remains available for external modules and integrations,
 but is not in the local acquisition path.
 
+## Repository architecture
+
+```text
+backend/                 Shared Python image and code
+├── disti/api/           Flask application factory and HTTP routes
+├── disti/hardware/      Contracts, providers, Raspberry adapter composition
+│   ├── adc/             ADC contract and ADS1115 adapter
+│   └── onewire/         1-Wire contract and DS2482/DS18B20 protocol adapter
+├── entrypoints/         API, hardware-agent, migration, and fixture executables
+├── migrations/          TimescaleDB schema migrations
+└── tests/               API, hardware, domain, and deployment tests
+grafana/                 Active PostgreSQL datasource and dashboards
+mosquitto/               MQTT broker
+nginx/                    Appliance reverse proxy
+watchdog/                 Independent container watchdog
+piTerminal/               Raspberry Pi kiosk and rollout tooling
+scripts/                  Operator update helpers
+```
+
+The `api` and `hardware-agent` services build the same `disti-backend` image
+but run separate entrypoints. Acquisition failures therefore cannot restart the
+API. The base stack defaults to mock acquisition and has no device mounts; the
+Raspberry overlay grants only `hardware-agent` access to `/dev/i2c-1`. Sensor
+measurements and Grafana use PostgreSQL/TimescaleDB. MQTT remains an integration
+boundary and is not part of local I2C acquisition.
+
 ## First-time setup
 
 ```sh
 cp disti.env.example disti.env
 nano disti.env                            # replace every change-me value
-docker compose up -d --build postgres backend
-docker compose exec -T backend python migrate.py
+docker compose up -d --build postgres api
+docker compose exec -T api python -m entrypoints.migrate
 docker compose up -d
 ```
 
-Migrations run inside the already allocated backend container. Do not use
+Migrations run inside the already allocated API container. Do not use
 `docker compose run` for migrations: this stack assigns static service IPs, so
-an extra one-off backend container can collide with the running backend's IP.
+an extra one-off API container can collide with the running API container's
+static IP.
 The `--build` is also required because migrations are copied into the backend
 image rather than bind-mounted from the checkout. Without it, `exec` can run an
 older copy of `migrate.py` and its SQL even when the Git working tree is current.
 
 After pulling a migration fix on an already-running QA controller, refresh the
-backend image and container before retrying it:
+shared backend image and API container before retrying it:
 
 ```sh
-docker compose build backend
-docker compose up -d --no-deps --force-recreate backend
-docker compose exec -T backend python migrate.py
+docker compose build api
+docker compose up -d --no-deps --force-recreate api
+docker compose exec -T api python -m entrypoints.migrate
 docker compose up -d
 ```
 
@@ -36,12 +63,13 @@ On the ARM64 Pi, rebuild and recreate both Python runtime services with the
 Raspberry hardware overlay (without restarting their dependencies):
 
 ```sh
-docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --build --no-deps --force-recreate backend hardware-agent
+docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --build --no-deps --force-recreate api hardware-agent
 ```
 
-Migrations run inside the already allocated backend container. Do not use
+Migrations run inside the already allocated API container. Do not use
 `docker compose run` for migrations: this stack assigns static service IPs, so
-an extra one-off backend container can collide with the running backend's IP.
+an extra one-off API container can collide with the running API container's
+static IP.
 
 `disti.env` is the single device-local application configuration file. It is
 ignored by Git and is never replaced by provisioning or rollout. Repository-root
@@ -53,14 +81,12 @@ credentials an operator maintains.
 Grafana receives its native `GF_SECURITY_ADMIN_USER` and
 `GF_SECURITY_ADMIN_PASSWORD` variables directly. Grafana datasource provisioning reads the same
 PostgreSQL variables directly. Mosquitto receives the MQTT variables unchanged
-and generates its hashed runtime-only password file before broker startup. Any
-MQTT client, including the provided Telegraf configuration, uses those same two
-variable names.
+and generates its hashed runtime-only password file before broker startup. Every MQTT client uses those same two variable names.
 
 The same file supplies PostgreSQL initialization and every database client,
 using one canonical contract: `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`,
 and `POSTGRES_PASSWORD`. Compose injects `disti.env` directly into PostgreSQL,
-backend, hardware-agent, watchdog, and Grafana, so normal operator commands do
+api, hardware-agent, watchdog, and Grafana, so normal operator commands do
 not need `--env-file`:
 
 ```sh
@@ -77,7 +103,7 @@ and recreate the containers without removing the named database volume:
 
 ```sh
 docker compose up -d --build --force-recreate
-docker compose exec -T backend python migrate.py
+docker compose exec -T api python -m entrypoints.migrate
 docker compose ps
 ```
 
@@ -242,7 +268,7 @@ persisted alongside uncorrected/calibrated values and calibration identity.
 Seed a complete fixed 91-minute engineering run with:
 
 ```sh
-docker compose exec -T backend python seed_mock_run.py
+docker compose exec -T api python -m entrypoints.seed_mock_run
 ```
 
 The seed is idempotent and includes BoilerTop, raw and placeholder-calibrated
@@ -278,8 +304,7 @@ for direct Grafana queries.
 
 The VENTI technical handoff is the rollout and provisioning reference. DISTI
 preserves its TimescaleDB, hardware-agent, Grafana, and local-I2C architecture;
-it intentionally does not port ChirpStack, InfluxDB, Panstamp, or local-hardware
-MQTT coupling.
+it intentionally does not port ChirpStack, Panstamp, or local-hardware MQTT coupling.
 
 ## Remaining physical hardware work
 

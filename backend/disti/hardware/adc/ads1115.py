@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import time
 
-from .hardware import ADCReader
+from ..base import ADCReader
 
 
 class ADS1115Error(RuntimeError):

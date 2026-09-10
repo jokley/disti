@@ -1,8 +1,8 @@
 import pytest
 
-from disti.ds2482 import DS2482OneWireReader, OneWireError, crc8
+from disti.hardware.onewire.ds2482 import DS2482OneWireReader, OneWireError, crc8
 from disti.hardware import RaspberrySensorReader
-from hardware_agent import Agent
+from entrypoints.hardware_agent import Agent
 
 
 def rom(serial):

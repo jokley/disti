@@ -36,6 +36,6 @@ log "Deploying $LOCAL_COMMIT -> $REMOTE_COMMIT"; git reset --hard "$REMOTE_COMMI
 run_compose config --quiet || rollback
 run_compose pull --ignore-buildable || rollback
 run_compose up -d --build --remove-orphans --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT_SEC" || rollback
-run_compose exec -T backend python migrate.py || rollback
+run_compose exec -T api python -m entrypoints.migrate || rollback
 wait_for_health || rollback
 log "Rollout completed: $REMOTE_COMMIT"

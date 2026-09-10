@@ -1,5 +1,5 @@
-from app import create_app
-import app as app_module
+from disti.api.app import create_app
+import disti.api.app as app_module
 
 
 def test_calibration_history_and_active_selection(repo):
@@ -33,7 +33,7 @@ def test_finalized_calibration_data_is_immutable(repo):
 def test_initial_schema_uses_non_reserved_calibration_offset():
     from pathlib import Path
 
-    sql = (Path(__file__).parents[1] / "migrations" / "001_modular_hardware.sql").read_text()
+    sql = (Path(__file__).parents[2] / "migrations" / "001_modular_hardware.sql").read_text()
     assert "calibration_offset double precision" in sql
     assert " offset double precision" not in sql
 

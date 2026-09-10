@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 import time
 
-from .hardware import OneWireReader
+from ..base import OneWireReader
 
 
 class OneWireError(RuntimeError):

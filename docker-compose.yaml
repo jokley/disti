@@ -12,14 +12,14 @@ services:
     ports:
       - "5432:5432"
     networks:
-      example-network:  
+      disti-network:
         ipv4_address: 172.16.238.11
-  
+
   mqtt:
     image: disti-mosquitto
     build:
       context: ./mosquitto
-    container_name: mqtt-broker
+    container_name: disti-mqtt
     restart: unless-stopped
     env_file:
       - disti.env
@@ -28,12 +28,12 @@ services:
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     networks:
-      example-network:  
+      disti-network:
         ipv4_address: 172.16.238.12
-        
-  backend:
+
+  api:
     image: disti-backend
-    container_name: flask-backend
+    container_name: disti-api
     build:
       context: ./backend
     restart: unless-stopped
@@ -50,7 +50,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      example-network:
+      disti-network:
         ipv4_address: 172.16.238.13
 
   hardware-agent:
@@ -58,7 +58,7 @@ services:
     image: disti-backend
     build:
       context: ./backend
-    command: ["python", "hardware_agent.py"]
+    command: ["python", "-m", "entrypoints.hardware_agent"]
     restart: unless-stopped
     depends_on:
       postgres:
@@ -73,7 +73,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      example-network:
+      disti-network:
         ipv4_address: 172.16.238.19
 
   watchdog:
@@ -82,59 +82,58 @@ services:
       context: ./watchdog
     restart: unless-stopped
     depends_on:
-      - backend
+      - api
       - postgres
       - hardware-agent
     env_file:
       - disti.env
     environment:
-      WATCHDOG_BACKEND_CONTAINER: flask-backend
+      WATCHDOG_BACKEND_CONTAINER: disti-api
       WATCHDOG_DATABASE_CONTAINER: disti-postgres
       WATCHDOG_HARDWARE_CONTAINER: disti-hardware-agent
-      WATCHDOG_BACKEND_HEALTH_URL: http://backend:5000/healthz
-      WATCHDOG_STATUS_URL: http://backend:5000/watchdog/status
+      WATCHDOG_BACKEND_HEALTH_URL: http://api:5000/healthz
+      WATCHDOG_STATUS_URL: http://api:5000/watchdog/status
     volumes:
       # Required for VENTI-parity targeted restarts; grants host-level Docker control.
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      example-network:
+      disti-network:
 
   grafana:
+    container_name: disti-grafana
     image: grafana/grafana:9.2.3
     restart: unless-stopped
     env_file:
       - disti.env
-    # depends_on:
-    #   - influxdb
     ports:
       - '3000:3000'
     volumes:
       - ./grafana/:/etc/grafana
       - ./grafana/plugins/:/var/lib/grafana/plugins
     networks:
-      example-network:
+      disti-network:
         ipv4_address: 172.16.238.18
-        
-        
+
+
   nginx:
     image: nginx:alpine
-    container_name: nginx
+    container_name: disti-nginx
     restart: unless-stopped
     ports:
       - "80:80"
     volumes:
        - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
-      example-network:
+      disti-network:
         ipv4_address: 172.16.238.10
 
 networks:
-  example-network:
-    name: example-network
+  disti-network:
+    name: disti-network
     driver: bridge
     ipam:
       driver: default
-      config: 
+      config:
         - subnet: 172.16.238.0/24
 
 volumes:
