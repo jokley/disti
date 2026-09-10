@@ -1,6 +1,6 @@
 # DISTI
 
-DISTI uses a Raspberry Pi controller, TimescaleDB, Flask, Grafana,
+DISTI is a Raspberry Pi appliance using TimescaleDB, Flask, Grafana,
 Mosquitto and nginx. Local I2C acquisition is deliberately isolated in the
 `hardware-agent`; MQTT remains available for external modules and integrations,
 but is not in the local acquisition path.
@@ -26,12 +26,24 @@ scripts/                  Operator update helpers
 
 The `api` and `hardware-agent` services build the same `disti-backend` image
 but run separate entrypoints. Acquisition failures therefore cannot restart the
-API. The base stack defaults to mock acquisition and has no device mounts; the
-Raspberry overlay grants only `hardware-agent` access to `/dev/i2c-1`. Sensor
+API. The single production stack grants only `hardware-agent` access to
+`/dev/i2c-1` and selects Raspberry hardware acquisition. Sensor
 measurements and Grafana use PostgreSQL/TimescaleDB. MQTT remains an integration
 boundary and is not part of local I2C acquisition.
 
 ## First-time setup
+
+Raspberry I2C must be enabled before starting DISTI, and `/dev/i2c-1` must
+exist because Compose maps that physical bus into the hardware agent:
+
+```sh
+sudo raspi-config nonint do_i2c 0
+ls -l /dev/i2c-1
+```
+
+The canonical foreground startup command for the one supported stack is
+`docker compose up --build`; use `docker compose up -d --build` when detached
+operation is appropriate.
 
 ```sh
 cp disti.env.example disti.env
@@ -59,11 +71,11 @@ docker compose exec -T api python -m entrypoints.migrate
 docker compose up -d
 ```
 
-On the ARM64 Pi, rebuild and recreate both Python runtime services with the
-Raspberry hardware overlay (without restarting their dependencies):
+On the ARM64 Pi, rebuild and recreate both Python runtime services without
+restarting their dependencies:
 
 ```sh
-docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --build --no-deps --force-recreate api hardware-agent
+docker compose up -d --build --no-deps --force-recreate api hardware-agent
 ```
 
 Migrations run inside the already allocated API container. Do not use
@@ -132,16 +144,18 @@ committing an `.htpasswd`.
 
 ## Hardware modes
 
-* **mock** (default): set `DISTI_HARDWARE_MODE=mock`. Deterministic elapsed-time
+The production Compose service selects **raspberry** mode. The mock and replay
+providers remain available for development and automated testing, but are not
+separate production Compose configurations.
+
+* **mock**: set `DISTI_HARDWARE_MODE=mock`. Deterministic elapsed-time
   temperature and EC curves are written every `DISTI_POLL_INTERVAL_SECONDS`.
   No devices or privileged containers are needed.
 * **replay**: set `DISTI_HARDWARE_MODE=replay` and `DISTI_REPLAY_RUN_ID` to a
   recorded run UUID. `DISTI_REPLAY_SPEED=10` runs ten times faster; set
   `DISTI_REPLAY_PRESERVE_TIMING=false` to emit as quickly as possible.
-* **raspberry**: set `DISTI_HARDWARE_MODE=raspberry` to use the ADS1115 and
-  DS2482-100 adapters,
-  then start with the `docker-compose.raspberry.yaml` overlay. Only
-  hardware-agent receives `/dev/i2c-1`; the rest of the stack is not privileged.
+* **raspberry** (production): uses the ADS1115 and DS2482-100 adapters. Only
+  `hardware-agent` receives `/dev/i2c-1`; the rest of the stack is not privileged.
 
 ### ADS1115 Raspberry configuration and validation
 
@@ -178,11 +192,11 @@ to A1. Never apply an analog input outside ADS1115 supply/absolute limits.
 On the Pi, enable I2C and validate the host before starting DISTI:
 
 ```sh
-ls -l /dev/i2c-*
+ls -l /dev/i2c-1
 sudo apt-get install -y i2c-tools              # if i2cdetect is absent
 i2cdetect -y 1                                 # expect 48 unless configured otherwise
-nano disti.env                                 # change mock to raspberry; confirm ADC settings
-docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --build
+nano disti.env                                 # confirm ADC settings
+docker compose up --build
 curl http://127.0.0.1:8081/healthz
 docker compose logs --tail=100 hardware-agent
 docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
@@ -195,17 +209,17 @@ status reports I2C availability, ADS1115 reachability, acquisition state, and
 the last successful read. A missing bus/device or transient read changes health
 to degraded with `last_error`; the process backs off and retries, and the ADC
 adapter reopens the bus after a read error rather than requiring a stack restart.
-To return to simulation, set `DISTI_HARDWARE_MODE=mock` and start normal base
-Compose with `docker compose up -d --build` (without the Raspberry overlay).
+Mock and replay acquisition remain development/testing options outside the
+canonical production Compose configuration.
 
 ### DS2482-100 and DS18B20 configuration
 
 Production temperature acquisition uses the DS2482-100 I2C-to-1-Wire bridge,
 **not** Raspberry GPIO/kernel w1 and never `/sys/bus/w1/devices`. The DS2482 and
-ADS1115 are independent clients of the same `/dev/i2c-1` device already exposed
-by the Raspberry Compose overlay. The physical Horter.de board supplies the
-required I2C electrical/level adaptation; that installation fact does not alter
-the DS2482 protocol implemented in software.
+ADS1115 are independent clients of the same `/dev/i2c-1` device exposed to the
+hardware agent by the production Compose configuration. The physical Horter.de
+board supplies the required I2C electrical/level adaptation; that installation
+fact does not alter the DS2482 protocol implemented in software.
 
 Up to three DS18B20s share the bridge's single 1-Wire bus. Their physical ROM
 IDs are mapped device-locally to stable logical roles. Empty values are valid:
@@ -243,10 +257,10 @@ ls -l /dev/i2c-1
 sudo apt-get update && sudo apt-get install -y i2c-tools
 i2cdetect -y 1                         # expect ADS1115 and configured DS2482 addresses
 nano disti.env                         # set raspberry mode, bridge address, leave ROM IDs empty
-docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --build
+docker compose up -d --build
 curl -s http://127.0.0.1:8081/healthz | python3 -m json.tool
 # Copy each onewire_unassigned_devices ROM into its intended DISTI_ONEWIRE_*_ID.
-docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --force-recreate hardware-agent
+docker compose up -d --force-recreate hardware-agent
 curl -s http://127.0.0.1:8081/healthz | python3 -m json.tool
 docker compose logs --tail=100 hardware-agent
 docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
@@ -334,10 +348,8 @@ For a delivered production controller run:
 sudo ./piTerminal/setup_client.sh
 ```
 
-Both commands default to the Raspberry Compose profile, which applies
-`docker-compose.yaml` plus `docker-compose.raspberry.yaml`. Use
-`--rollout-compose-profile base` only for a device without local I2C access.
-Docker, WireGuard, graphical kiosk, and rollout are installed by default;
+Both commands install the single supported Raspberry Compose stack. Docker,
+WireGuard, graphical kiosk, and rollout are installed by default;
 `--skip-docker`, `--skip-wireguard`, `--no-kiosk`, and `--no-rollout` support
 pre-provisioned or headless clients. Huawei-compatible USB modem recovery is
 opt-in through `--usb-modem-recovery`.
@@ -354,10 +366,10 @@ is requested.
 
 On a controller upgraded from the older layout, copy the active values from
 `.disti-local/disti.env` to the repository-root `disti.env`, then rerun
-`setup_rollout.sh --replace-config` with the controller's existing branch and
-profile selections. After successful startup, remove the obsolete local MQTT
-password and nginx htpasswd copies. Updates reset only tracked files, so the
-root `disti.env` and any ignored migration leftovers are not overwritten.
+`setup_rollout.sh --replace-config` with the controller's existing branch
+selection. After successful startup, remove the obsolete local MQTT password
+and nginx htpasswd copies. Updates reset only tracked files, so the root
+`disti.env` and any ignored migration leftovers are not overwritten.
 
 Useful diagnostics:
 

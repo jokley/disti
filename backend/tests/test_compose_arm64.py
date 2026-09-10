@@ -12,14 +12,13 @@ from disti.repository import Repository
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE_COMPOSE = (ROOT / "docker-compose.yaml").read_text()
-RASPBERRY_COMPOSE = (ROOT / "docker-compose.raspberry.yaml").read_text()
 NGINX_CONFIG = (ROOT / "nginx/nginx.conf").read_text()
 GRAFANA_DATASOURCE = (ROOT / "grafana/provisioning/datasources/datasources.yaml").read_text()
 README = (ROOT / "README.md").read_text()
 
 
 def test_compose_has_no_legacy_architecture_or_frontend_references():
-    combined = BASE_COMPOSE + RASPBERRY_COMPOSE + NGINX_CONFIG
+    combined = BASE_COMPOSE + NGINX_CONFIG
 
     assert not BASE_COMPOSE.startswith("version:")
     assert "arm32" not in combined
@@ -299,17 +298,38 @@ def test_mqtt_password_initialization_is_restart_safe_and_does_not_leak(tmp_path
 
 
 def test_raspberry_device_access_is_hardware_agent_only():
-    assert "DISTI_HARDWARE_MODE: raspberry" in RASPBERRY_COMPOSE
-    assert RASPBERRY_COMPOSE.count("/dev/i2c-1:/dev/i2c-1") == 1
-    assert RASPBERRY_COMPOSE.splitlines()[2].strip() == "hardware-agent:"
-    assert "privileged:" not in BASE_COMPOSE + RASPBERRY_COMPOSE
+    service_config = BASE_COMPOSE.split("\nnetworks:", 1)[0]
+    service_matches = re.findall(r"^  ([\w-]+):\n(.*?)(?=^  \S|\Z)", service_config,
+                                 flags=re.MULTILINE | re.DOTALL)
+    services = dict(service_matches)
+    expected = {"api", "hardware-agent", "postgres", "mqtt", "watchdog", "grafana", "nginx"}
+
+    assert set(services) == expected
+    assert {re.search(r"^    container_name: (.+)$", config, re.MULTILINE).group(1)
+            for config in services.values()} == {
+        "disti-api", "disti-hardware-agent", "disti-postgres", "disti-mqtt",
+        "disti-watchdog", "disti-grafana", "disti-nginx",
+    }
+    hardware_agent = services["hardware-agent"]
+    assert "DISTI_HARDWARE_MODE: raspberry" in hardware_agent
+    assert hardware_agent.count("/dev/i2c-1:/dev/i2c-1") == 1
+    assert all("/dev/i2c-1" not in config for name, config in services.items()
+               if name != "hardware-agent")
+    assert all("privileged:" not in config for config in services.values())
+    assert "image: disti-backend" in services["api"]
+    assert "image: disti-backend" in hardware_agent
+    assert "healthcheck:" in services["api"]
+    assert "healthcheck:" in hardware_agent
+    watchdog = services["watchdog"]
+    assert "WATCHDOG_BACKEND_CONTAINER: disti-api" in watchdog
+    assert "WATCHDOG_HARDWARE_CONTAINER: disti-hardware-agent" in watchdog
+    assert "WATCHDOG_DATABASE_CONTAINER: disti-postgres" in watchdog
 
 
 def test_runtime_structure_and_grafana_have_no_removed_legacy_dependencies():
     tracked_runtime = "\n".join(
         (ROOT / path).read_text(errors="ignore")
-        for path in ("docker-compose.yaml", "docker-compose.raspberry.yaml",
-                     "disti.env.example", "README.md",
+        for path in ("docker-compose.yaml", "disti.env.example", "README.md",
                      "grafana/provisioning/datasources/datasources.yaml")
     ).lower()
     assert not (ROOT / "influxdb").exists()

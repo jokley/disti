@@ -25,8 +25,7 @@ def test_provisioning_defaults_to_main_and_installs_stable_runtime():
     assert "BRANCH=main" in client
     assert "/etc/disti-update.conf" in setup
     assert "/usr/local/sbin/disti-update" in setup
-    assert "--compose-profile" in setup
-    assert "base|raspberry" in setup
+    assert "--compose-profile" not in setup
     assert 'install -o "$DISTI_USER" -g "$GROUP" -m0600 "$REPO_DIR/disti.env.example" "$REPO_DIR/disti.env"' in setup
     assert ".disti-local" not in setup
     assert "DISTI_MQTT_PASSWORD_FILE" not in setup
@@ -37,7 +36,7 @@ def test_rollout_requires_disti_env_without_compose_override():
     updater = (root / "piTerminal/rollout/disti-update").read_text()
 
     assert '[[ -r "$DISTI_DIR/disti.env" ]]' in updater
-    assert "COMPOSE_ARGS=(-f docker-compose.yaml)" in updater
+    assert 'run_compose(){ docker compose "$@"; }' in updater
     assert "--env-file" not in updater
     assert "git clean" not in updater
 
@@ -45,7 +44,7 @@ def test_rollout_requires_disti_env_without_compose_override():
 def test_runtime_rejects_dev_before_git_or_docker(tmp_path):
     root = Path(__file__).parents[2]
     config = tmp_path / "disti-update.conf"
-    config.write_text(f'DISTI_DIR="{tmp_path}"\nDEPLOY_BRANCH="dev"\nCOMPOSE_PROFILE="base"\nHEALTH_URL="http://invalid"\n')
+    config.write_text(f'DISTI_DIR="{tmp_path}"\nDEPLOY_BRANCH="dev"\nHEALTH_URL="http://invalid"\n')
     result = subprocess.run([root / "piTerminal/rollout/disti-update"], text=True,
                             env={**os.environ, "DISTI_UPDATE_CONFIG": str(config),
                                  "DISTI_UPDATE_LOCK": str(tmp_path / "lock")}, capture_output=True)
@@ -58,7 +57,7 @@ def test_pull_failure_rolls_back_and_revalidates_health(tmp_path):
     config = tmp_path / "config"
     env_file = tmp_path / "disti.env"
     env_file.write_text("MQTT_USERNAME=test\nMQTT_PASSWORD=test\n")
-    config.write_text(f'DISTI_DIR="{tmp_path}"\nDEPLOY_BRANCH="qa"\nCOMPOSE_PROFILE="base"\nHEALTH_URL="http://healthz"\nHEALTH_RETRIES="1"\nHEALTH_SLEEP_SEC="0"\n')
+    config.write_text(f'DISTI_DIR="{tmp_path}"\nDEPLOY_BRANCH="qa"\nHEALTH_URL="http://healthz"\nHEALTH_RETRIES="1"\nHEALTH_SLEEP_SEC="0"\n')
     bindir = tmp_path / "bin"; bindir.mkdir(); log = tmp_path / "calls"
     (bindir / "git").write_text(f'''#!/bin/sh
 echo "git $*" >>"{log}"
