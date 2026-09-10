@@ -245,7 +245,8 @@ def test_mqtt_credentials_generate_an_untracked_password_file_at_startup():
     assert "env_file:" in BASE_COMPOSE
     assert "MQTT_USERNAME" in entrypoint
     assert "MQTT_PASSWORD" in entrypoint
-    assert "mosquitto_passwd -b -c \"$temporary_file\"" in entrypoint
+    assert "mosquitto_passwd -b \"$temporary_file\"" in entrypoint
+    assert "mosquitto_passwd -b -c" not in entrypoint
     assert "mktemp" in entrypoint
     assert "mv -f \"$temporary_file\" \"$password_file\"" in entrypoint
     assert 'id -u "$runtime_user"' in entrypoint
@@ -273,7 +274,14 @@ def test_mqtt_password_initialization_is_restart_safe_and_does_not_leak(tmp_path
     binaries = tmp_path / "bin"
     binaries.mkdir()
     passwd = binaries / "mosquitto_passwd"
-    passwd.write_text("#!/bin/sh\nprintf '%s\\n' '$7$hashed-not-plaintext' > \"$3\"\n")
+    passwd.write_text(
+        "#!/bin/sh\n"
+        "set -eu\n"
+        "[ \"$1\" = '-b' ]\n"
+        "[ \"${2:-}\" != '-c' ]\n"
+        "[ -f \"$2\" ]\n"
+        "printf '%s\\n' '$7$hashed-not-plaintext' > \"$2\"\n"
+    )
     passwd.chmod(0o755)
     env = os.environ | {
         "PATH": f"{binaries}:{os.environ['PATH']}",

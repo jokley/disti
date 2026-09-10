@@ -19,7 +19,9 @@ chmod 0750 "$password_dir"
 find "$password_dir" -maxdepth 1 -type f -name '.password.txt.*' -delete
 temporary_file="$(mktemp "$password_dir/.password.txt.XXXXXX")"
 trap 'rm -f "$temporary_file"' EXIT HUP INT TERM
-mosquitto_passwd -b -c "$temporary_file" \
+# mktemp has already securely created the unique file. Update that file rather
+# than asking mosquitto_passwd -c to create it again.
+mosquitto_passwd -b "$temporary_file" \
   "$MQTT_USERNAME" "$MQTT_PASSWORD"
 chown "$runtime_uid:$runtime_gid" "$temporary_file"
 chmod 0600 "$temporary_file"
