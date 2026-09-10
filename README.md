@@ -112,7 +112,8 @@ committing an `.htpasswd`.
 * **replay**: set `DISTI_HARDWARE_MODE=replay` and `DISTI_REPLAY_RUN_ID` to a
   recorded run UUID. `DISTI_REPLAY_SPEED=10` runs ten times faster; set
   `DISTI_REPLAY_PRESERVE_TIMING=false` to emit as quickly as possible.
-* **raspberry**: set `DISTI_HARDWARE_MODE=raspberry` to use the ADS1115 adapter,
+* **raspberry**: set `DISTI_HARDWARE_MODE=raspberry` to use the ADS1115 and
+  DS2482-100 adapters,
   then start with the `docker-compose.raspberry.yaml` overlay. Only
   hardware-agent receives `/dev/i2c-1`; the rest of the stack is not privileged.
 
@@ -171,6 +172,68 @@ adapter reopens the bus after a read error rather than requiring a stack restart
 To return to simulation, set `DISTI_HARDWARE_MODE=mock` and start normal base
 Compose with `docker compose up -d --build` (without the Raspberry overlay).
 
+### DS2482-100 and DS18B20 configuration
+
+Production temperature acquisition uses the DS2482-100 I2C-to-1-Wire bridge,
+**not** Raspberry GPIO/kernel w1 and never `/sys/bus/w1/devices`. The DS2482 and
+ADS1115 are independent clients of the same `/dev/i2c-1` device already exposed
+by the Raspberry Compose overlay. The physical Horter.de board supplies the
+required I2C electrical/level adaptation; that installation fact does not alter
+the DS2482 protocol implemented in software.
+
+Up to three DS18B20s share the bridge's single 1-Wire bus. Their physical ROM
+IDs are mapped device-locally to stable logical roles. Empty values are valid:
+
+```dotenv
+DISTI_ONEWIRE_TYPE=ds2482
+DISTI_DS2482_I2C_BUS=1
+DISTI_DS2482_ADDRESS=0x18
+DISTI_ONEWIRE_VAPOR_ID=
+DISTI_ONEWIRE_COOLER_ID=
+DISTI_ONEWIRE_RESERVE_ID=
+```
+
+`0x18` is the DS2482-100 base-address assumption, not a confirmed Horter-board
+address; confirm its address straps with `i2cdetect` and override it when
+needed. Discovery retains every valid DS18B20 ROM. It never assigns an unknown
+device automatically. Health reports configured assignments, newly discovered
+unassigned ROMs, and configured-but-missing ROMs separately. Thus replacing a
+probe means discovering its new ROM and updating only the corresponding local
+variable; the logical `vapor-temp`, `cooler-temp`, or `reserve-temp` identity
+and its history remain stable. A missing optional/reserve probe does not stop
+ADC acquisition.
+
+Each polling cycle performs a ROM search, starts one broadcast Convert T, waits
+the DS18B20 12-bit worst-case 750 ms, and then addresses each assigned/present
+probe to read its scratchpad. ROM and scratchpad Dallas CRC-8 are validated;
+bad data is never emitted. One broadcast conversion avoids a separate 750 ms
+wait per assigned sensor while keeping the existing sequential agent simple.
+
+Exact Raspberry Pi bring-up and validation procedure:
+
+```sh
+sudo raspi-config nonint do_i2c 0
+ls -l /dev/i2c-1
+sudo apt-get update && sudo apt-get install -y i2c-tools
+i2cdetect -y 1                         # expect ADS1115 and configured DS2482 addresses
+nano disti.env                         # set raspberry mode, bridge address, leave ROM IDs empty
+docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --build
+curl -s http://127.0.0.1:8081/healthz | python3 -m json.tool
+# Copy each onewire_unassigned_devices ROM into its intended DISTI_ONEWIRE_*_ID.
+docker compose -f docker-compose.yaml -f docker-compose.raspberry.yaml up -d --force-recreate hardware-agent
+curl -s http://127.0.0.1:8081/healthz | python3 -m json.tool
+docker compose logs --tail=100 hardware-agent
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT time,sensor_id,value,unit,metadata FROM sensor_measurements WHERE sensor_id IN ('vapor-temp','cooler-temp','reserve-temp') ORDER BY time DESC LIMIT 12;"
+```
+
+Expected health includes `onewire_enabled: true`, `ds2482_reachable: true`,
+`onewire_bus_available: true`, the discovered count, assignment/unassigned/
+missing collections, `last_successful_onewire_read`, and a sanitized
+`onewire_last_error`. Before physical sign-off confirm the Horter board's exact
+DS2482 address straps, DS2482 power mode, 1-Wire pull-up/power arrangement,
+cable-length reliability, and the printed ROM-to-probe/role correspondence.
+
 The agent's health endpoint is `http://127.0.0.1:8081/healthz` on the host and
 `http://hardware-agent:8081/healthz` inside Compose; backend health is
 `http://127.0.0.1:5000/healthz`. Raw ADC counts and millivolts are always
@@ -220,8 +283,9 @@ MQTT coupling.
 
 ## Remaining physical hardware work
 
-Bench-test the ADS1115 adapter and implement concrete `TemperatureProvider` and
-`FractionCollector` adapters for later hardware. Confirm gain/reference voltage, EC compensation/model,
+Bench-test the ADS1115 and DS2482 adapters and implement concrete
+`FractionCollector` hardware for later hardware. Confirm gain/reference voltage,
+EC compensation/model,
 1-Wire topology, I2C addresses, HOME interlocks, position limits, recovery after
 brownouts, and Raspberry group/device permissions before enabling raspberry
 mode. Mock and replay modes intentionally make none of these assumptions.
