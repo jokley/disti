@@ -12,7 +12,7 @@ backend/                 Shared Python image and code
 ├── disti/api/           Flask application factory and HTTP routes
 ├── disti/hardware/      Contracts, providers, Raspberry adapter composition
 │   ├── adc/             ADC contract and ADS1115 adapter
-│   └── onewire/         1-Wire contract and DS2482/DS18B20 protocol adapter
+│   └── onewire/         1-Wire contract and DS2484/DS18B20 protocol adapter
 ├── entrypoints/         API, hardware-agent, migration, and fixture executables
 ├── migrations/          TimescaleDB schema migrations
 └── tests/               API, hardware, domain, and deployment tests
@@ -154,7 +154,7 @@ separate production Compose configurations.
 * **replay**: set `DISTI_HARDWARE_MODE=replay` and `DISTI_REPLAY_RUN_ID` to a
   recorded run UUID. `DISTI_REPLAY_SPEED=10` runs ten times faster; set
   `DISTI_REPLAY_PRESERVE_TIMING=false` to emit as quickly as possible.
-* **raspberry** (production): uses the ADS1115 and DS2482-100 adapters. Only
+* **raspberry** (production): uses the ADS1115 and DS2484 adapters. Only
   `hardware-agent` receives `/dev/i2c-1`; the rest of the stack is not privileged.
 
 ### ADS1115 Raspberry configuration and validation
@@ -212,36 +212,54 @@ adapter reopens the bus after a read error rather than requiring a stack restart
 Mock and replay acquisition remain development/testing options outside the
 canonical production Compose configuration.
 
-### DS2482-100 and DS18B20 configuration
+### DS2484 and DS18B20 configuration
 
-Production temperature acquisition uses the DS2482-100 I2C-to-1-Wire bridge,
-**not** Raspberry GPIO/kernel w1 and never `/sys/bus/w1/devices`. The DS2482 and
+Production temperature acquisition uses the Adafruit ADA5976 DS2484
+I2C-to-1-Wire adapter,
+**not** Raspberry GPIO/kernel w1 and never `/sys/bus/w1/devices`. The DS2484 and
 ADS1115 are independent clients of the same `/dev/i2c-1` device exposed to the
-hardware agent by the production Compose configuration. The physical Horter.de
-board supplies the required I2C electrical/level adaptation; that installation
-fact does not alter the DS2482 protocol implemented in software.
+hardware agent by the production Compose configuration. The ADA5976 breakout
+connects to the Raspberry Pi I2C bus alongside the ADS1115 and exposes the
+DS2484 1-Wire port for the DS18B20 bus.
+
+```text
+Raspberry Pi
+    |
+    +-- I2C -- ADS1115
+    |              +-- A0 -- ec-1
+    |              +-- A1 -- ec-temp
+    |
+    +-- I2C -- DS2484 (Adafruit ADA5976)
+                       |
+                       +-- 1-Wire -- vapor-temp / cooler-temp / reserve-temp
+```
 
 Up to three DS18B20s share the bridge's single 1-Wire bus. Their physical ROM
 IDs are mapped device-locally to stable logical roles. Empty values are valid:
 
 ```dotenv
-DISTI_ONEWIRE_TYPE=ds2482
-DISTI_DS2482_I2C_BUS=1
-DISTI_DS2482_ADDRESS=0x18
+DISTI_ONEWIRE_TYPE=ds2484
+DISTI_DS2484_I2C_BUS=1
+DISTI_DS2484_ADDRESS=0x18
 DISTI_ONEWIRE_VAPOR_ID=
 DISTI_ONEWIRE_COOLER_ID=
 DISTI_ONEWIRE_RESERVE_ID=
 ```
 
-`0x18` is the DS2482-100 base-address assumption, not a confirmed Horter-board
-address; confirm its address straps with `i2cdetect` and override it when
-needed. Discovery retains every valid DS18B20 ROM. It never assigns an unknown
-device automatically. Health reports configured assignments, newly discovered
+`0x18` is the documented ADA5976 default address. The breakout address jumpers
+can select `0x18` through `0x1b`; verify the actual board with
+`i2cdetect -y 1` and override it when needed. Discovery retains every valid
+DS18B20 ROM. It never assigns an unknown device automatically. Health reports
+configured assignments, newly discovered
 unassigned ROMs, and configured-but-missing ROMs separately. Thus replacing a
 probe means discovering its new ROM and updating only the corresponding local
 variable; the logical `vapor-temp`, `cooler-temp`, or `reserve-temp` identity
 and its history remain stable. A missing optional/reserve probe does not stop
 ADC acquisition.
+
+The address and command details above follow the
+[Adafruit ADA5976 product documentation](https://www.adafruit.com/product/5976)
+and the [Analog Devices DS2484 data sheet](https://www.analog.com/media/en/technical-documentation/data-sheets/ds2484.pdf).
 
 Each polling cycle performs a ROM search, starts one broadcast Convert T, waits
 the DS18B20 12-bit worst-case 750 ms, and then addresses each assigned/present
@@ -255,7 +273,7 @@ Exact Raspberry Pi bring-up and validation procedure:
 sudo raspi-config nonint do_i2c 0
 ls -l /dev/i2c-1
 sudo apt-get update && sudo apt-get install -y i2c-tools
-i2cdetect -y 1                         # expect ADS1115 and configured DS2482 addresses
+i2cdetect -y 1                         # expect ADS1115 and configured DS2484 addresses
 nano disti.env                         # set raspberry mode, bridge address, leave ROM IDs empty
 docker compose up -d --build
 curl -s http://127.0.0.1:8081/healthz | python3 -m json.tool
@@ -267,11 +285,11 @@ docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
   -c "SELECT time,sensor_id,value,unit,metadata FROM sensor_measurements WHERE sensor_id IN ('vapor-temp','cooler-temp','reserve-temp') ORDER BY time DESC LIMIT 12;"
 ```
 
-Expected health includes `onewire_enabled: true`, `ds2482_reachable: true`,
+Expected health includes `onewire_enabled: true`, `ds2484_reachable: true`,
 `onewire_bus_available: true`, the discovered count, assignment/unassigned/
 missing collections, `last_successful_onewire_read`, and a sanitized
-`onewire_last_error`. Before physical sign-off confirm the Horter board's exact
-DS2482 address straps, DS2482 power mode, 1-Wire pull-up/power arrangement,
+`onewire_last_error`. Before physical sign-off confirm the ADA5976's detected
+DS2484 address, DS2484 power mode, 1-Wire pull-up/power arrangement,
 cable-length reliability, and the printed ROM-to-probe/role correspondence.
 
 The agent's health endpoint is `http://127.0.0.1:8081/healthz` on the host and
@@ -322,7 +340,7 @@ it intentionally does not port ChirpStack, Panstamp, or local-hardware MQTT coup
 
 ## Remaining physical hardware work
 
-Bench-test the ADS1115 and DS2482 adapters and implement concrete
+Bench-test the ADS1115 and Adafruit ADA5976 DS2484 adapter and implement concrete
 `FractionCollector` hardware for later hardware. Confirm gain/reference voltage,
 EC compensation/model,
 1-Wire topology, I2C addresses, HOME interlocks, position limits, recovery after

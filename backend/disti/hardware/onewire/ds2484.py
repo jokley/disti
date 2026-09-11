@@ -1,4 +1,4 @@
-"""DS2482-100 I2C-to-1-Wire adapter and DS18B20 protocol handling."""
+"""DS2484 I2C-to-1-Wire adapter and DS18B20 protocol handling."""
 from pathlib import Path
 import re
 import time
@@ -23,7 +23,7 @@ def crc8(data):
     return crc
 
 
-class DS2482OneWireReader(OneWireReader):
+class DS2484OneWireReader(OneWireReader):
     DEVICE_RESET = 0xF0
     SET_READ_POINTER = 0xE1
     WRITE_CONFIG = 0xD2
@@ -41,8 +41,8 @@ class DS2482OneWireReader(OneWireReader):
                  sleep=time.sleep, conversion_time=0.75):
         self.bus_number = int(bus)
         self.address = int(address, 0) if isinstance(address, str) else int(address)
-        if not 0x18 <= self.address <= 0x1f:
-            raise ValueError("DS2482 address must be between 0x18 and 0x1f")
+        if not 0x18 <= self.address <= 0x1b:
+            raise ValueError("DS2484 address must be between 0x18 and 0x1b")
         self._factory = bus_factory or self._default_bus_factory
         self._device_exists = device_exists or Path.exists
         self._sleep = sleep
@@ -77,9 +77,14 @@ class DS2482OneWireReader(OneWireReader):
             config = 0x01
             self._bus.write_byte_data(self.address, self.WRITE_CONFIG,
                                       config | ((~config & 0x0f) << 4))
+            # Write Configuration selects the configuration read pointer.  The
+            # DS2484 returns the accepted low nibble, so reject a device that
+            # ACKs at this address but does not implement the expected register.
+            if self._bus.read_byte(self.address) & 0x0f != config:
+                raise OSError("configuration was not accepted")
             self.reachable, self.last_error = True, None
         except (OSError, IOError) as exc:
-            self._fail(f"DS2482 at 0x{self.address:02x} did not respond", exc)
+            self._fail(f"DS2484 at 0x{self.address:02x} did not respond", exc)
 
     def _disconnect(self):
         if self._bus is not None:
@@ -160,7 +165,7 @@ class DS2482OneWireReader(OneWireReader):
         except OneWireError:
             raise
         except (OSError, IOError) as exc:
-            self._fail("DS2482 1-Wire discovery failed", exc)
+            self._fail("DS2484 1-Wire discovery failed", exc)
 
     @staticmethod
     def format_rom(rom):

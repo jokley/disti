@@ -19,13 +19,13 @@ class RaspberrySensorReader(SensorReader):
         self._factory = adc_factory
         self.adc = adc
         self.onewire_type = os.getenv("DISTI_ONEWIRE_TYPE", "disabled").lower()
-        if self.onewire_type not in ("disabled", "ds2482"):
-            raise ValueError("unsupported DISTI_ONEWIRE_TYPE (expected ds2482 or disabled)")
-        self.onewire_enabled = self.onewire_type == "ds2482"
+        if self.onewire_type not in ("disabled", "ds2484"):
+            raise ValueError("unsupported DISTI_ONEWIRE_TYPE (expected ds2484 or disabled)")
+        self.onewire_enabled = self.onewire_type == "ds2484"
         self._onewire_factory = onewire_factory
         self.onewire = onewire
-        self.onewire_bus = int(os.getenv("DISTI_DS2482_I2C_BUS", str(self.bus)))
-        self.onewire_address = os.getenv("DISTI_DS2482_ADDRESS", "0x18")
+        self.onewire_bus = int(os.getenv("DISTI_DS2484_I2C_BUS", str(self.bus)))
+        self.onewire_address = os.getenv("DISTI_DS2484_ADDRESS", "0x18")
         self.onewire_assignments = {
             "vapor-temp": os.getenv("DISTI_ONEWIRE_VAPOR_ID", "").strip().lower(),
             "cooler-temp": os.getenv("DISTI_ONEWIRE_COOLER_ID", "").strip().lower(),
@@ -57,8 +57,8 @@ class RaspberrySensorReader(SensorReader):
 
     def _initialize_onewire(self):
         if self._onewire_factory is None:
-            from .onewire.ds2482 import DS2482OneWireReader
-            self._onewire_factory = DS2482OneWireReader
+            from .onewire.ds2484 import DS2484OneWireReader
+            self._onewire_factory = DS2484OneWireReader
         self.onewire = self._onewire_factory(bus=self.onewire_bus, address=self.onewire_address)
 
     def read(self):
@@ -96,7 +96,7 @@ class RaspberrySensorReader(SensorReader):
                 for sensor_id, rom in readable.items():
                     readings.append(SensorReading(
                         sensor_id, "temperature", temperatures[rom], "°C", timestamp=stamp,
-                        metadata={"source": "onewire", "adapter": "ds2482",
+                        metadata={"source": "onewire", "adapter": "ds2484",
                                   "device_family": "ds18b20", "rom_id": rom}))
                 self.last_successful_onewire_read, self.onewire_last_error = stamp, None
             except Exception as exc:
@@ -123,7 +123,7 @@ class RaspberrySensorReader(SensorReader):
             "last_successful_read": self.last_successful_read.isoformat() if self.last_successful_read else None,
             "last_error": self.last_error,
             "onewire_enabled": self.onewire_enabled,
-            "ds2482_reachable": bool(self.onewire and getattr(self.onewire, "available", False)),
+            "ds2484_reachable": bool(self.onewire and getattr(self.onewire, "available", False)),
             "onewire_bus_available": bool(self.onewire and getattr(self.onewire, "bus_available", False)),
             "onewire_discovered_count": len(self.discovered_onewire),
             "onewire_assigned_devices": assigned,
@@ -133,5 +133,4 @@ class RaspberrySensorReader(SensorReader):
                                               if self.last_successful_onewire_read else None),
             "onewire_last_error": self.onewire_last_error,
         }
-
 
