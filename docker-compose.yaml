@@ -134,6 +134,8 @@ networks:
   disti-network:
     name: disti-network
     driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1400
     ipam:
       driver: default
       config:

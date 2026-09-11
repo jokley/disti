@@ -121,6 +121,9 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
         "DISTI_ONEWIRE_VAPOR_ID": "",
         "DISTI_ONEWIRE_COOLER_ID": "",
         "DISTI_ONEWIRE_RESERVE_ID": "",
+        "DISTI_NTFY_ENABLED": "false",
+        "DISTI_NTFY_BASE_URL": "https://ntfy.sh",
+        "DISTI_NTFY_TOPIC": "",
         "WATCHDOG_CHECK_INTERVAL_SEC": "30",
         "WATCHDOG_BACKEND_RECHECK_SEC": "2",
         "WATCHDOG_RECOVERY_WAIT_SEC": "30",
@@ -138,7 +141,7 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
     assert set(values.values()) <= {"postgres", "jokley", "change-me", "mock", "2", "8081",
                                     "http://hardware-agent:8081", "30", "120", "4", "3", "900",
                                     "", "0", "0x48", "0x18", "ads1115", "ds2484",
-                                    "128", "1", "true"}
+                                    "128", "1", "true", "false", "https://ntfy.sh"}
     ignored = (ROOT / ".gitignore").read_text().splitlines()
     for path in ("disti.env", ".env", ".disti-local/", "mosquitto/password.txt",
                  "nginx/.htpasswd", "piTerminal/client-configs/"):
