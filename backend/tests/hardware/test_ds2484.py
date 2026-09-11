@@ -1,6 +1,6 @@
 import pytest
 
-from disti.hardware.onewire.ds2482 import DS2482OneWireReader, OneWireError, crc8
+from disti.hardware.onewire.ds2484 import DS2484OneWireReader, OneWireError, crc8
 from disti.hardware import RaspberrySensorReader
 from entrypoints.hardware_agent import Agent
 
@@ -8,7 +8,7 @@ from entrypoints.hardware_agent import Agent
 def rom(serial):
     raw = bytes([0x28]) + int(serial).to_bytes(6, "little")
     raw += bytes([crc8(raw)])
-    return DS2482OneWireReader.format_rom(raw)
+    return DS2484OneWireReader.format_rom(raw)
 
 
 class FakeSMBus:
@@ -16,6 +16,7 @@ class FakeSMBus:
         self.fail_reset = fail_reset
         self.writes = []
         self.closed = False
+        self.configured = False
 
     def write_byte(self, address, value):
         self.writes.append(("byte", address, value))
@@ -24,8 +25,13 @@ class FakeSMBus:
 
     def write_byte_data(self, address, command, value):
         self.writes.append(("data", address, command, value))
+        if command == 0xD2:
+            self.configured = True
 
     def read_byte(self, address):
+        if self.configured:
+            self.configured = False
+            return 0x01
         return 0x10
 
     def close(self):
@@ -34,7 +40,7 @@ class FakeSMBus:
 
 def test_initialization_uses_configured_bus_address_and_configures_apu():
     bus, opened = FakeSMBus(), []
-    reader = DS2482OneWireReader(bus=3, address="0x1a",
+    reader = DS2484OneWireReader(bus=3, address="0x1a",
         bus_factory=lambda number: opened.append(number) or bus,
         device_exists=lambda _: True, sleep=lambda _: None)
     assert opened == [3]
@@ -42,16 +48,16 @@ def test_initialization_uses_configured_bus_address_and_configures_apu():
     assert reader.available and reader.bus_available
 
 
-def test_missing_i2c_bus_and_nonresponding_ds2482_are_meaningful():
+def test_missing_i2c_bus_and_nonresponding_ds2484_are_meaningful():
     with pytest.raises(OneWireError, match="/dev/i2c-7"):
-        DS2482OneWireReader(bus=7, device_exists=lambda _: False)
+        DS2484OneWireReader(bus=7, device_exists=lambda _: False)
     with pytest.raises(OneWireError, match="0x18 did not respond"):
-        DS2482OneWireReader(bus_factory=lambda _: FakeSMBus(True),
+        DS2484OneWireReader(bus_factory=lambda _: FakeSMBus(True),
                             device_exists=lambda _: True)
 
 
-class SearchReader(DS2482OneWireReader):
-    """Protocol harness emulating DS2482 triplets over a set of ROM bit streams."""
+class SearchReader(DS2484OneWireReader):
+    """Protocol harness emulating DS2484 triplets over a set of ROM bit streams."""
     def __init__(self, devices):
         self.devices = [self.parse_rom(item) for item in devices]
         self.reachable = True
@@ -92,7 +98,13 @@ def test_presence_no_presence_and_rom_search_one_or_multiple_devices():
     assert set(SearchReader([first, second]).discover()) == {first, second}
 
 
-class TemperatureReader(DS2482OneWireReader):
+def test_dallas_crc8_known_vector_and_address_range():
+    assert crc8(bytes.fromhex("28010000000000")) == 0x29
+    with pytest.raises(ValueError, match="0x18 and 0x1b"):
+        DS2484OneWireReader(address=0x1c, device_exists=lambda _: True)
+
+
+class TemperatureReader(DS2484OneWireReader):
     def __init__(self, scratchpads):
         self.scratchpads = scratchpads
         self.selected = None
@@ -133,10 +145,20 @@ def test_scratchpad_crc_failure_is_rejected():
         TemperatureReader({sensor: bad}).read_temperature(sensor)
 
 
+def test_busy_timeout_is_reported_and_disconnects():
+    bus = FakeSMBus()
+    reader = DS2484OneWireReader(bus_factory=lambda _: bus,
+                                 device_exists=lambda _: True, sleep=lambda _: None)
+    bus.read_byte = lambda _: 0x01
+    with pytest.raises(OneWireError, match="timed out"):
+        reader.discover()
+    assert bus.closed and not reader.available
+
+
 def test_transient_i2c_failure_disconnects_and_reinitializes():
     failed, recovered = FakeSMBus(), FakeSMBus()
     buses = iter([failed, recovered])
-    reader = DS2482OneWireReader(bus_factory=lambda _: next(buses),
+    reader = DS2484OneWireReader(bus_factory=lambda _: next(buses),
                                  device_exists=lambda _: True, sleep=lambda _: None)
     failed.write_byte = lambda *_: (_ for _ in ()).throw(OSError("temporary"))
     with pytest.raises(OneWireError, match="discovery failed"):
@@ -164,7 +186,7 @@ class FakeOneWire:
 
 def test_assigned_unassigned_and_missing_mapping_is_stable(monkeypatch):
     vapor, unknown, missing = rom(11), rom(12), rom(13)
-    monkeypatch.setenv("DISTI_ONEWIRE_TYPE", "ds2482")
+    monkeypatch.setenv("DISTI_ONEWIRE_TYPE", "ds2484")
     monkeypatch.setenv("DISTI_ONEWIRE_VAPOR_ID", vapor)
     monkeypatch.setenv("DISTI_ONEWIRE_RESERVE_ID", missing)
     reader = RaspberrySensorReader(adc=FakeADC(), onewire=FakeOneWire([vapor, unknown], {vapor: 78.625}))
@@ -177,17 +199,29 @@ def test_assigned_unassigned_and_missing_mapping_is_stable(monkeypatch):
     assert all(item.sensor_id != "reserve-temp" for item in readings)
 
 
-def test_raspberry_selects_ds2482_configuration(monkeypatch):
-    monkeypatch.setenv("DISTI_ONEWIRE_TYPE", "ds2482")
-    monkeypatch.setenv("DISTI_DS2482_I2C_BUS", "4")
-    monkeypatch.setenv("DISTI_DS2482_ADDRESS", "0x1b")
+def test_present_reserve_sensor_keeps_its_logical_role(monkeypatch):
+    reserve = rom(14)
+    monkeypatch.setenv("DISTI_ONEWIRE_TYPE", "ds2484")
+    monkeypatch.setenv("DISTI_ONEWIRE_RESERVE_ID", reserve)
+    reader = RaspberrySensorReader(
+        adc=FakeADC(), onewire=FakeOneWire([reserve], {reserve: 21.5}))
+    reading = next(item for item in reader.read() if item.sensor_id == "reserve-temp")
+    assert reading.measurement_type == "temperature"
+    assert reading.unit == "°C"
+    assert reading.metadata["adapter"] == "ds2484"
+
+
+def test_raspberry_selects_ds2484_configuration(monkeypatch):
+    monkeypatch.setenv("DISTI_ONEWIRE_TYPE", "ds2484")
+    monkeypatch.setenv("DISTI_DS2484_I2C_BUS", "4")
+    monkeypatch.setenv("DISTI_DS2484_ADDRESS", "0x1b")
     captured = {}
     RaspberrySensorReader(adc=FakeADC(), onewire_factory=lambda **kw: captured.update(kw) or FakeOneWire([]))
     assert captured == {"bus": 4, "address": "0x1b"}
 
 
 def test_missing_bridge_does_not_crash_constructor_or_adc_acquisition(monkeypatch):
-    monkeypatch.setenv("DISTI_ONEWIRE_TYPE", "ds2482")
+    monkeypatch.setenv("DISTI_ONEWIRE_TYPE", "ds2484")
     reader = RaspberrySensorReader(adc=FakeADC(),
         onewire_factory=lambda **_: (_ for _ in ()).throw(OneWireError("bridge unavailable")))
     assert len(reader.read()) == 2
@@ -195,7 +229,7 @@ def test_missing_bridge_does_not_crash_constructor_or_adc_acquisition(monkeypatc
 
 
 def test_mock_replay_provider_selection_remains_hardware_free(monkeypatch, repo):
-    monkeypatch.setenv("DISTI_ONEWIRE_TYPE", "ds2482")
+    monkeypatch.setenv("DISTI_ONEWIRE_TYPE", "ds2484")
     monkeypatch.setenv("DISTI_HARDWARE_MODE", "mock")
     assert Agent(repo).reader.__class__.__name__ == "MockSensorReader"
     monkeypatch.setenv("DISTI_HARDWARE_MODE", "replay")
