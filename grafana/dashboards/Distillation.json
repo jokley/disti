@@ -86,7 +86,7 @@
         "showThresholdLabels": true,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.2.3",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -184,7 +184,7 @@
         },
         "showUnfilled": true
       },
-      "pluginVersion": "9.2.3",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
