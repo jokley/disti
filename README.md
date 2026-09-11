@@ -414,3 +414,18 @@ transient backend failures and records container state and recent logs. Restarts
 are bounded by per-service cooldown and a shared hourly budget. The watchdog
 requires `/var/run/docker.sock`; this grants host-level Docker control and is an
 explicit deployment tradeoff inherited from VENTI.
+
+## ntfy notification transport
+
+DISTI includes a fire-and-forget ntfy transport for future application events;
+it is not connected to alarms or hardware acquisition. Set
+`DISTI_NTFY_ENABLED=true`, `DISTI_NTFY_BASE_URL`, and a private
+`DISTI_NTFY_TOPIC` in the device-local `disti.env`, then restart the API. To
+send a manual test from the running stack, use:
+
+```sh
+docker compose exec api python -c "from disti.notifications import send_notification; send_notification('DISTI test', 'Notification transport is working')"
+```
+
+Delivery runs in a daemon thread with a finite network timeout. Missing
+configuration and delivery failures are logged without interrupting callers.
