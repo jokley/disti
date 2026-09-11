@@ -105,7 +105,7 @@ services:
 
   grafana:
     container_name: disti-grafana
-    image: grafana/grafana:9.2.3
+    image: grafana/grafana:13.2.1
     restart: unless-stopped
     env_file:
       - disti.env
@@ -113,7 +113,6 @@ services:
       - '3000:3000'
     volumes:
       - ./grafana/:/etc/grafana
-      - ./grafana/plugins/:/var/lib/grafana/plugins
     networks:
       disti-network:
         ipv4_address: 172.16.238.18

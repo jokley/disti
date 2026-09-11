@@ -41,7 +41,7 @@ def test_compose_uses_portable_multi_arch_images():
     assert "image: nginx:alpine" in BASE_COMPOSE
     assert "context: ./mosquitto" in BASE_COMPOSE
     assert "image: timescale/timescaledb:latest-pg15" in BASE_COMPOSE
-    assert "image: grafana/grafana:9.2.3" in BASE_COMPOSE
+    assert "image: grafana/grafana:13.2.1" in BASE_COMPOSE
     assert BASE_COMPOSE.count("image: disti-backend") == 2
 
 
