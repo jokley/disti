@@ -375,25 +375,51 @@ opt-in through `--usb-modem-recovery`.
 The rollout installer copies the runtime updater outside the checkout to
 `/usr/local/sbin/disti-update`, creates the preserved device-local
 `/etc/disti-update.conf`, and enables a persistent, randomized systemd timer.
-The installer creates `disti.env` from the safe example only when it is absent
-and otherwise preserves it. The updater requires that repository-root file.
-`.disti-local/` is retained in `.gitignore` only so data left by older
-installations cannot be committed; the current rollout owns no files there.
+The installer creates repository-root `disti.env` from the safe example only
+when no configuration exists and otherwise preserves it. If only the legacy
+`.disti-local/disti.env` exists, installation migrates it without printing its
+contents. Repository-root `disti.env` is the sole current configuration path;
+`.disti-local/` remains ignored only for backward-compatible migration.
 Existing `/etc/disti-update.conf` files are preserved unless `--replace-config`
-is requested.
+is explicitly requested. Legacy `COMPOSE_PROFILE` values are harmless and no
+longer select another Compose file; the updater always uses the one canonical
+`docker-compose.yaml` stack.
 
-On a controller upgraded from the older layout, copy the active values from
-`.disti-local/disti.env` to the repository-root `disti.env`, then rerun
-`setup_rollout.sh --replace-config` with the controller's existing branch
-selection. After successful startup, remove the obsolete local MQTT password
-and nginx htpasswd copies. Updates reset only tracked files, so the root
-`disti.env` and any ignored migration leftovers are not overwritten.
+Before every revision change, the updater copies `disti.env` to a private
+temporary file and restores it byte-for-byte after both deployment and
+rollback. This also automatically handles the one-time transition from old
+revisions that tracked `disti.env` to current revisions that ignore it. Other
+tracked modifications still abort the update. Rollout validates Compose, pulls
+and builds images, recreates the stack without deleting volumes, runs migrations
+inside the running `api` container, and checks API health. A failed step resets
+the previous Git revision, restores the same local configuration, and attempts
+to restart and health-check that stack. Neither update nor rollback uses volume
+removal.
+
+After a successful healthy rollout, the updater atomically refreshes its
+installed runtime for the next timer invocation when it has non-interactive
+permission to do so; the process already in progress continues using its open
+script. Controllers whose old installed updater predates this behavior need one
+one-time installer refresh after pulling this fix:
+
+```sh
+sudo ./piTerminal/setup_rollout.sh --branch qa    # QA validation controller
+# or, for a delivered device:
+sudo ./piTerminal/setup_rollout.sh --branch main
+```
+
+Do not pass `--replace-config`: the installer preserves the existing channel,
+timeouts, URL, and other administrator settings. Select the command matching
+the already configured channel. No `COMPOSE_PROFILE` edit or manual
+`disti.env` move is required.
 
 Useful diagnostics:
 
 ```sh
 sudo -u pi /usr/local/sbin/disti-update
+sudo systemctl start disti-update.service
 systemctl list-timers disti-update.timer
+journalctl -u disti-update.service -f
 journalctl -u disti-update.service --since today
 curl http://127.0.0.1:5000/healthz
 curl http://127.0.0.1:5000/watchdog/status
