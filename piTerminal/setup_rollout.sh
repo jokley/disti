@@ -15,7 +15,10 @@ install -o root -g root -m0755 "$SCRIPT_DIR/rollout/disti-update" "$RUNTIME_SCRI
 install -o root -g root -m0644 "$SCRIPT_DIR/rollout/disti-update.service" /etc/systemd/system/disti-update.service
 install -o root -g root -m0644 "$SCRIPT_DIR/rollout/disti-update.timer" /etc/systemd/system/disti-update.timer
 sed -i -e "s/^User=.*/User=$DISTI_USER/" -e "s/^Group=.*/Group=$GROUP/" /etc/systemd/system/disti-update.service
-if [[ ! -e "$REPO_DIR/disti.env" ]]; then
+if [[ ! -e "$REPO_DIR/disti.env" && -r "$REPO_DIR/.disti-local/disti.env" ]]; then
+  install -o "$DISTI_USER" -g "$GROUP" -m0600 "$REPO_DIR/.disti-local/disti.env" "$REPO_DIR/disti.env"
+  log "Migrated legacy device configuration to $REPO_DIR/disti.env"
+elif [[ ! -e "$REPO_DIR/disti.env" ]]; then
   [[ -f "$REPO_DIR/disti.env.example" ]] || fail "Missing disti.env.example"
   install -o "$DISTI_USER" -g "$GROUP" -m0600 "$REPO_DIR/disti.env.example" "$REPO_DIR/disti.env"
   log "Created $REPO_DIR/disti.env; replace placeholder credentials before starting DISTI"
