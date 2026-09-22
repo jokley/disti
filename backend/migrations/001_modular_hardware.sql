@@ -14,7 +14,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_active_distillation_run ON distillation_ru
 CREATE TABLE IF NOT EXISTS sensor_calibrations (
   id uuid PRIMARY KEY, sensor_id text NOT NULL REFERENCES sensors(id), version text NOT NULL,
   model text NOT NULL DEFAULT 'linear', points jsonb NOT NULL DEFAULT '[]'::jsonb,
-  slope double precision, offset double precision, active boolean NOT NULL DEFAULT false,
+  slope double precision, calibration_offset double precision, active boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL, metadata jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_calibration_per_sensor ON sensor_calibrations(sensor_id) WHERE active;
