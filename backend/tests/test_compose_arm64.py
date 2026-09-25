@@ -129,6 +129,7 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
         "WATCHDOG_RECOVERY_WAIT_SEC": "30",
         "WATCHDOG_COOLDOWN_SEC": "120",
         "WATCHDOG_MAX_RESTARTS_PER_HOUR": "4",
+        "WATCHDOG_STARTUP_GRACE_SEC": "60",
         "WATCHDOG_BACKEND_RETRIES": "3",
         "WATCHDOG_ALERT_COOLDOWN_SEC": "900",
         "DISTI_REPLAY_RUN_ID": "",
@@ -139,7 +140,7 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
                   if line and not line.startswith("#"))
     assert values == canonical
     assert set(values.values()) <= {"postgres", "jokley", "change-me", "mock", "2", "8081",
-                                    "http://hardware-agent:8081", "30", "120", "4", "3", "900",
+                                    "http://hardware-agent:8081", "30", "60", "120", "4", "3", "900",
                                     "", "0", "0x48", "0x18", "ads1115", "ds2484",
                                     "128", "1", "true", "false", "https://ntfy.sh"}
     ignored = (ROOT / ".gitignore").read_text().splitlines()
