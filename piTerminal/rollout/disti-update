@@ -1,38 +1,133 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+
 CONFIG_FILE="${DISTI_UPDATE_CONFIG:-/etc/disti-update.conf}"
 LOCK_FILE="${DISTI_UPDATE_LOCK:-/run/lock/disti-update.lock}"
-log(){ printf '%s %s\n' "$(date --iso-8601=seconds)" "$*"; }
-fail(){ log "ERROR: $*" >&2; exit 1; }
-load_config(){
+RUNTIME_SCRIPT="${DISTI_UPDATE_RUNTIME:-/usr/local/sbin/disti-update}"
+ENV_BACKUP=
+
+log() { printf '%s %s\n' "$(date --iso-8601=seconds)" "$*"; }
+fail() { log "ERROR: $*" >&2; exit 1; }
+cleanup() { [[ -z "$ENV_BACKUP" ]] || rm -f -- "$ENV_BACKUP"; }
+trap cleanup EXIT
+
+load_config() {
   [[ -r "$CONFIG_FILE" ]] || fail "Configuration missing or unreadable: $CONFIG_FILE"
   # shellcheck source=/dev/null
   source "$CONFIG_FILE"
   : "${DISTI_DIR:?DISTI_DIR missing}" "${DEPLOY_BRANCH:?DEPLOY_BRANCH missing}" "${HEALTH_URL:?HEALTH_URL missing}"
-  HEALTH_RETRIES="${HEALTH_RETRIES:-12}"; HEALTH_SLEEP_SEC="${HEALTH_SLEEP_SEC:-10}"; COMPOSE_WAIT_TIMEOUT_SEC="${COMPOSE_WAIT_TIMEOUT_SEC:-180}"
+  HEALTH_RETRIES="${HEALTH_RETRIES:-12}"
+  HEALTH_SLEEP_SEC="${HEALTH_SLEEP_SEC:-10}"
+  COMPOSE_WAIT_TIMEOUT_SEC="${COMPOSE_WAIT_TIMEOUT_SEC:-180}"
   case "$DEPLOY_BRANCH" in qa|main);; *) fail "Unsupported DEPLOY_BRANCH: $DEPLOY_BRANCH (allowed: qa, main)";; esac
   [[ "$HEALTH_RETRIES" =~ ^[0-9]+$ && "$HEALTH_SLEEP_SEC" =~ ^[0-9]+$ && "$COMPOSE_WAIT_TIMEOUT_SEC" =~ ^[0-9]+$ ]] || fail "Timeout and retry values must be integers"
-  [[ -r "$DISTI_DIR/disti.env" ]] || fail "Device configuration missing or unreadable: $DISTI_DIR/disti.env"
 }
-run_compose(){ docker compose "$@"; }
-wait_for_health(){ local attempt; for ((attempt=1;attempt<=HEALTH_RETRIES;attempt++)); do
-  if curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" >/dev/null; then log "Health check passed: $HEALTH_URL"; return 0; fi
-  log "Health check not ready ($attempt/$HEALTH_RETRIES)"; sleep "$HEALTH_SLEEP_SEC"; done; return 1; }
-rollback(){ log "Rolling back to $LOCAL_COMMIT"; git reset --hard "$LOCAL_COMMIT"
-  if run_compose config --quiet && run_compose up -d --build --remove-orphans --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT_SEC" && wait_for_health; then
-    log "Rollback completed: $LOCAL_COMMIT"; else log "CRITICAL: rollback failed: $LOCAL_COMMIT" >&2; fi; exit 1; }
+
+run_compose() { docker compose -f docker-compose.yaml "$@"; }
+
+preserve_device_config() {
+  local source_file="$DISTI_DIR/disti.env"
+  if [[ ! -r "$source_file" && -n "${DISTI_ENV_FILE:-}" && -r "$DISTI_ENV_FILE" ]]; then
+    source_file="$DISTI_ENV_FILE"
+    log "Migrating legacy device configuration to $DISTI_DIR/disti.env"
+  elif [[ ! -r "$source_file" && -r "$DISTI_DIR/.disti-local/disti.env" ]]; then
+    source_file="$DISTI_DIR/.disti-local/disti.env"
+    log "Migrating legacy device configuration to $DISTI_DIR/disti.env"
+  fi
+  [[ -r "$source_file" ]] || fail "Device configuration missing or unreadable: $DISTI_DIR/disti.env"
+  ENV_BACKUP="$(mktemp "${TMPDIR:-/tmp}/disti-env.XXXXXXXX")"
+  chmod 0600 "$ENV_BACKUP"
+  cat -- "$source_file" >"$ENV_BACKUP"
+}
+
+restore_device_config() {
+  [[ -n "$ENV_BACKUP" && -r "$ENV_BACKUP" ]] || fail "Preserved device configuration is unavailable"
+  rm -f -- "$DISTI_DIR/disti.env"
+  install -m 0600 "$ENV_BACKUP" "$DISTI_DIR/disti.env"
+}
+
+wait_for_health() {
+  local attempt
+  for ((attempt=1; attempt<=HEALTH_RETRIES; attempt++)); do
+    if curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" >/dev/null; then
+      log "Health check passed: $HEALTH_URL"
+      return 0
+    fi
+    log "Health check not ready ($attempt/$HEALTH_RETRIES)"
+    sleep "$HEALTH_SLEEP_SEC"
+  done
+  return 1
+}
+
+rollback() {
+  log "Rolling back to $LOCAL_COMMIT"
+  git reset --hard "$LOCAL_COMMIT"
+  restore_device_config
+  if run_compose config --quiet &&
+     run_compose up -d --build --remove-orphans --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT_SEC" &&
+     wait_for_health; then
+    log "Rollback completed: $LOCAL_COMMIT"
+  else
+    log "CRITICAL: rollback failed: $LOCAL_COMMIT" >&2
+  fi
+  exit 1
+}
+
+refresh_runtime() {
+  local candidate="$DISTI_DIR/piTerminal/rollout/disti-update"
+  [[ -f "$candidate" ]] || { log "WARNING: updater refresh skipped; candidate is missing"; return; }
+  cmp -s "$candidate" "$RUNTIME_SCRIPT" && return
+
+  # Install only after a healthy rollout. A same-directory temporary plus mv keeps
+  # the running inode intact and makes the next timer invocation atomic.
+  if [[ -w "$(dirname "$RUNTIME_SCRIPT")" ]]; then
+    if ! install -m 0755 "$candidate" "${RUNTIME_SCRIPT}.new" ||
+       ! mv -f "${RUNTIME_SCRIPT}.new" "$RUNTIME_SCRIPT"; then
+      rm -f -- "${RUNTIME_SCRIPT}.new"
+      log "WARNING: updater refresh failed; run setup_rollout.sh to refresh it"
+      return
+    fi
+  elif command -v sudo >/dev/null && sudo -n true 2>/dev/null; then
+    if ! sudo -n install -m 0755 "$candidate" "${RUNTIME_SCRIPT}.new" ||
+       ! sudo -n mv -f "${RUNTIME_SCRIPT}.new" "$RUNTIME_SCRIPT"; then
+      sudo -n rm -f -- "${RUNTIME_SCRIPT}.new" 2>/dev/null || true
+      log "WARNING: updater refresh failed; run setup_rollout.sh to refresh it"
+      return
+    fi
+  else
+    log "WARNING: updater refresh requires setup_rollout.sh (no non-interactive privilege available)"
+    return
+  fi
+  log "Installed updater runtime refreshed for the next run"
+}
+
 load_config
-exec 9>"$LOCK_FILE"; if ! flock -n 9; then log "Another rollout is running; exiting"; exit 0; fi
-cd "$DISTI_DIR"; git rev-parse --is-inside-work-tree >/dev/null || fail "$DISTI_DIR is not a Git repository"
-if ! git diff --quiet || ! git diff --cached --quiet; then fail "Tracked local changes found; rollout aborted"; fi
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then log "Another rollout is running; exiting"; exit 0; fi
+cd "$DISTI_DIR"
+git rev-parse --is-inside-work-tree >/dev/null || fail "$DISTI_DIR is not a Git repository"
+
+# disti.env was tracked by historical releases. It is the one permitted tracked
+# difference so its device values can cross the transition to the ignored file.
+if ! git diff --quiet -- . ':(exclude)disti.env' ||
+   ! git diff --cached --quiet -- . ':(exclude)disti.env'; then
+  fail "Tracked local changes found; rollout aborted"
+fi
+preserve_device_config
+
 log "Checking origin/$DEPLOY_BRANCH"
 git fetch --prune origin "+refs/heads/${DEPLOY_BRANCH}:refs/remotes/origin/${DEPLOY_BRANCH}"
-LOCAL_COMMIT="$(git rev-parse HEAD)"; REMOTE_COMMIT="$(git rev-parse "origin/$DEPLOY_BRANCH")"
+LOCAL_COMMIT="$(git rev-parse HEAD)"
+REMOTE_COMMIT="$(git rev-parse "origin/$DEPLOY_BRANCH")"
 [[ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]] || { log "No update: $LOCAL_COMMIT"; exit 0; }
-log "Deploying $LOCAL_COMMIT -> $REMOTE_COMMIT"; git reset --hard "$REMOTE_COMMIT"
+
+log "Deploying $LOCAL_COMMIT -> $REMOTE_COMMIT"
+git reset --hard "$REMOTE_COMMIT"
+restore_device_config
 run_compose config --quiet || rollback
 run_compose pull --ignore-buildable || rollback
 run_compose up -d --build --remove-orphans --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT_SEC" || rollback
 run_compose exec -T api python -m entrypoints.migrate || rollback
 wait_for_health || rollback
+refresh_runtime
 log "Rollout completed: $REMOTE_COMMIT"

@@ -168,7 +168,12 @@ def test_compose_has_no_credential_interpolation_or_legacy_names():
     ]
     combined = "\n".join(path.read_text() for path in runtime_files)
     assert all(name not in combined for name in legacy_names)
-    assert "DISTI_ENV_FILE" not in combined
+    # The updater accepts this historical setting only as a one-time source for
+    # repository-root disti.env. Compose and fresh provisioning never use it.
+    assert "DISTI_ENV_FILE" not in (ROOT / "docker-compose.yaml").read_text()
+    assert "DISTI_ENV_FILE" not in (ROOT / "piTerminal/setup_rollout.sh").read_text()
+    updater = (ROOT / "piTerminal/rollout/disti-update").read_text()
+    assert 'source_file="$DISTI_ENV_FILE"' in updater
     assert not re.search(r"\$\{[^}]*?(?:PASSWORD|USERNAME|USER)[^}]*}", BASE_COMPOSE)
     assert "GF_SECURITY_ADMIN_USER" not in BASE_COMPOSE.split("environment:")[-1]
 
