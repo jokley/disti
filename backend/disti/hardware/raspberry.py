@@ -5,6 +5,17 @@ from pathlib import Path
 
 from .base import SensorReader, SensorReading
 
+# Linear calibration measured on QA DISTI hardware against two DS18B20
+# references during a slow cooling curve. Input is the ADS1115 reading in mV.
+PT1000_TEMPERATURE_SLOPE_C_PER_MV = 0.0601035
+PT1000_TEMPERATURE_OFFSET_C = -20.0625
+
+
+def pt1000_temperature_c(raw_mv):
+    """Convert the calibrated ec-temp PT1000 millivolts to degrees Celsius."""
+    return raw_mv * PT1000_TEMPERATURE_SLOPE_C_PER_MV + PT1000_TEMPERATURE_OFFSET_C
+
+
 class RaspberrySensorReader(SensorReader):
     """Configured Raspberry provider; bus protocols remain behind readers."""
     def __init__(self, adc=None, adc_factory=None, onewire=None, onewire_factory=None):
@@ -71,11 +82,15 @@ class RaspberrySensorReader(SensorReader):
                 self._initialize_adc()
             for sensor_id, measurement_type, channel in self.channels:
                 sample = self.adc.read_channel(channel)
+                is_pt1000 = sensor_id == "ec-temp"
                 readings.append(SensorReading(
-                    sensor_id, measurement_type, sample.raw_mv, "mV", timestamp=stamp,
+                    sensor_id, measurement_type,
+                    pt1000_temperature_c(sample.raw_mv) if is_pt1000 else sample.raw_mv,
+                    "°C" if is_pt1000 else "mV", timestamp=stamp,
                     raw_value=sample.raw_count, raw_mv=sample.raw_mv,
                     metadata={"adc_type": "ads1115", "channel": channel,
-                              "engineering_conversion": "not_configured"}))
+                              "engineering_conversion": ("pt1000_qa_linear_calibration"
+                                                         if is_pt1000 else "not_configured")}))
             self.last_successful_read, self.last_error = stamp, None
         except Exception as exc:
             adc_exception = exc
@@ -133,4 +148,3 @@ class RaspberrySensorReader(SensorReader):
                                               if self.last_successful_onewire_read else None),
             "onewire_last_error": self.onewire_last_error,
         }
-

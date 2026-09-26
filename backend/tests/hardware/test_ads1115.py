@@ -2,6 +2,7 @@ import pytest
 
 from disti.hardware.adc.ads1115 import ADS1115Error, ADS1115Reader
 from disti.hardware import RaspberrySensorReader
+from disti.hardware.raspberry import pt1000_temperature_c
 from entrypoints.hardware_agent import Agent
 
 
@@ -97,7 +98,19 @@ class FakeADC:
         return type("Sample", (), {"raw_count": 100 + channel, "raw_mv": 12.5 + channel})()
 
 
-def test_raspberry_provider_maps_ec_and_pt1000_without_calibration():
+@pytest.mark.parametrize(("raw_mv", "expected_c"), [
+    (712, 22.73),
+    (750, 25.01),
+    (833, 30.00),
+    (916, 34.99),
+    (999, 39.98),
+    (1083, 45.03),
+])
+def test_pt1000_calibration_points(raw_mv, expected_c):
+    assert pt1000_temperature_c(raw_mv) == pytest.approx(expected_c, abs=0.01)
+
+
+def test_raspberry_provider_calibrates_only_pt1000_and_preserves_raw_values():
     adc = FakeADC()
     reader = RaspberrySensorReader(adc=adc)
     readings = reader.read()
@@ -106,9 +119,13 @@ def test_raspberry_provider_maps_ec_and_pt1000_without_calibration():
         ("ec-1", "ec"), ("ec-temp", "temperature")]
     assert readings[0].raw_value == 100 and readings[0].raw_mv == 12.5
     assert readings[1].raw_value == 101 and readings[1].raw_mv == 13.5
+    assert readings[0].value == 12.5
     assert readings[0].unit == "mV"
+    assert readings[1].value == pytest.approx(pt1000_temperature_c(13.5))
+    assert readings[1].unit == "°C"
     assert readings[0].calibration_id is None
     assert readings[0].metadata["engineering_conversion"] == "not_configured"
+    assert readings[1].metadata["engineering_conversion"] == "pt1000_qa_linear_calibration"
     assert reader.health()["acquisition_running"]
 
 
