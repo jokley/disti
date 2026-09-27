@@ -10,10 +10,39 @@ from .base import SensorReader, SensorReading
 PT1000_TEMPERATURE_SLOPE_C_PER_MV = 0.0601035
 PT1000_TEMPERATURE_OFFSET_C = -20.0625
 
+# DFRobot SEN0451 / DFRobot_ECPRO conversion constants.  The K factor was
+# calibrated from 1617.6 mV in 1413 uS/cm (at 25 C) solution measured at
+# 21.32 C. DFRobot_ECPRO uses 2%/C to normalize conductivity to 25 C.
+DFROBOT_ECPRO_RES2_OHMS = 820.0
+DFROBOT_ECPRO_ECREF = 2.0
+DFROBOT_ECPRO_REFERENCE_TEMPERATURE_C = 25.0
+DFROBOT_ECPRO_TEMPERATURE_COEFFICIENT = 0.02
+EC_CALIBRATION_VOLTAGE_MV = 1617.6
+EC_CALIBRATION_TEMPERATURE_C = 21.32
+EC_CALIBRATION_REFERENCE_US_CM_AT_25_C = 1413.0
+EC_K_FACTOR = 1.3271298516320476
+
 
 def pt1000_temperature_c(raw_mv):
     """Convert the calibrated ec-temp PT1000 millivolts to degrees Celsius."""
     return raw_mv * PT1000_TEMPERATURE_SLOPE_C_PER_MV + PT1000_TEMPERATURE_OFFSET_C
+
+
+def ecpro_k_factor(voltage_mv, reference_us_cm):
+    """Return K using DFRobot_ECPRO::calibrate voltage/reference semantics."""
+    return (reference_us_cm * DFROBOT_ECPRO_RES2_OHMS * DFROBOT_ECPRO_ECREF /
+            (1000.0 * voltage_mv))
+
+
+def ecpro_us_cm(voltage_mv, temperature_c=None, k_factor=EC_K_FACTOR):
+    """Port DFRobot_ECPRO::getEC_us_cm, optionally compensated to 25 C."""
+    conductivity = (1000.0 * voltage_mv * k_factor /
+                    DFROBOT_ECPRO_RES2_OHMS / DFROBOT_ECPRO_ECREF)
+    if temperature_c is None:
+        return conductivity
+    temperature_factor = 1.0 + DFROBOT_ECPRO_TEMPERATURE_COEFFICIENT * (
+        temperature_c - DFROBOT_ECPRO_REFERENCE_TEMPERATURE_C)
+    return conductivity / temperature_factor
 
 
 class RaspberrySensorReader(SensorReader):
@@ -80,17 +109,27 @@ class RaspberrySensorReader(SensorReader):
         try:
             if self.adc is None:
                 self._initialize_adc()
+            samples = {
+                sensor_id: self.adc.read_channel(channel)
+                for sensor_id, _, channel in self.channels
+            }
+            ec_temperature_c = pt1000_temperature_c(samples["ec-temp"].raw_mv)
             for sensor_id, measurement_type, channel in self.channels:
-                sample = self.adc.read_channel(channel)
+                sample = samples[sensor_id]
                 is_pt1000 = sensor_id == "ec-temp"
+                is_ec = sensor_id == "ec-1"
                 readings.append(SensorReading(
                     sensor_id, measurement_type,
-                    pt1000_temperature_c(sample.raw_mv) if is_pt1000 else sample.raw_mv,
-                    "°C" if is_pt1000 else "mV", timestamp=stamp,
+                    (ec_temperature_c if is_pt1000 else
+                     ecpro_us_cm(sample.raw_mv, ec_temperature_c)),
+                    "°C" if is_pt1000 else "µS/cm", timestamp=stamp,
                     raw_value=sample.raw_count, raw_mv=sample.raw_mv,
                     metadata={"adc_type": "ads1115", "channel": channel,
                               "engineering_conversion": ("pt1000_qa_linear_calibration"
-                                                         if is_pt1000 else "not_configured")}))
+                                                         if is_pt1000 else
+                                                         "dfrobot_ecpro_sen0451"),
+                              **({"temperature_c": ec_temperature_c,
+                                  "k_factor": EC_K_FACTOR} if is_ec else {})}))
             self.last_successful_read, self.last_error = stamp, None
         except Exception as exc:
             adc_exception = exc
