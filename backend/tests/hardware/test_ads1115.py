@@ -2,7 +2,16 @@ import pytest
 
 from disti.hardware.adc.ads1115 import ADS1115Error, ADS1115Reader
 from disti.hardware import RaspberrySensorReader
-from disti.hardware.raspberry import pt1000_temperature_c
+from disti.hardware.raspberry import (
+    DFROBOT_ECPRO_TEMPERATURE_COEFFICIENT,
+    EC_CALIBRATION_REFERENCE_US_CM_AT_25_C,
+    EC_CALIBRATION_TEMPERATURE_C,
+    EC_CALIBRATION_VOLTAGE_MV,
+    EC_K_FACTOR,
+    ecpro_k_factor,
+    ecpro_us_cm,
+    pt1000_temperature_c,
+)
 from entrypoints.hardware_agent import Agent
 
 
@@ -98,6 +107,39 @@ class FakeADC:
         return type("Sample", (), {"raw_count": 100 + channel, "raw_mv": 12.5 + channel})()
 
 
+def test_ecpro_official_default_temperature_example():
+    assert ecpro_us_cm(1547, k_factor=1.0) == pytest.approx(943.29, abs=0.01)
+
+
+def test_ecpro_official_temperature_compensated_example():
+    assert ecpro_us_cm(1538, 23.02, k_factor=1.0) == pytest.approx(976.46, abs=0.02)
+
+
+def test_ecpro_calibration_point_and_k_factor():
+    temperature_factor = 1.0 + DFROBOT_ECPRO_TEMPERATURE_COEFFICIENT * (
+        EC_CALIBRATION_TEMPERATURE_C - 25.0)
+    reference_at_measurement_temperature = (
+        EC_CALIBRATION_REFERENCE_US_CM_AT_25_C * temperature_factor)
+    calculated_k = ecpro_k_factor(
+        EC_CALIBRATION_VOLTAGE_MV, reference_at_measurement_temperature)
+
+    assert calculated_k == pytest.approx(1.3271298516320476)
+    assert calculated_k == pytest.approx(EC_K_FACTOR)
+    assert ecpro_us_cm(
+        EC_CALIBRATION_VOLTAGE_MV,
+        EC_CALIBRATION_TEMPERATURE_C,
+    ) == pytest.approx(EC_CALIBRATION_REFERENCE_US_CM_AT_25_C)
+
+
+@pytest.mark.parametrize(("voltage_mv", "temperature_c", "expected"), [
+    (0.0, 25.0, 0.0),
+    (820.0, 25.0, 500.0),
+    (820.0, 35.0, 500.0 / 1.2),
+])
+def test_ecpro_representative_inputs(voltage_mv, temperature_c, expected):
+    assert ecpro_us_cm(voltage_mv, temperature_c, k_factor=1.0) == pytest.approx(expected)
+
+
 @pytest.mark.parametrize(("raw_mv", "expected_c"), [
     (712, 22.73),
     (750, 25.01),
@@ -110,7 +152,7 @@ def test_pt1000_calibration_points(raw_mv, expected_c):
     assert pt1000_temperature_c(raw_mv) == pytest.approx(expected_c, abs=0.01)
 
 
-def test_raspberry_provider_calibrates_only_pt1000_and_preserves_raw_values():
+def test_raspberry_provider_converts_ec_with_pt1000_and_preserves_raw_values():
     adc = FakeADC()
     reader = RaspberrySensorReader(adc=adc)
     readings = reader.read()
@@ -119,12 +161,15 @@ def test_raspberry_provider_calibrates_only_pt1000_and_preserves_raw_values():
         ("ec-1", "ec"), ("ec-temp", "temperature")]
     assert readings[0].raw_value == 100 and readings[0].raw_mv == 12.5
     assert readings[1].raw_value == 101 and readings[1].raw_mv == 13.5
-    assert readings[0].value == 12.5
-    assert readings[0].unit == "mV"
+    expected_temperature = pt1000_temperature_c(13.5)
+    assert readings[0].value == pytest.approx(ecpro_us_cm(12.5, expected_temperature))
+    assert readings[0].unit == "µS/cm"
     assert readings[1].value == pytest.approx(pt1000_temperature_c(13.5))
     assert readings[1].unit == "°C"
     assert readings[0].calibration_id is None
-    assert readings[0].metadata["engineering_conversion"] == "not_configured"
+    assert readings[0].metadata["engineering_conversion"] == "dfrobot_ecpro_sen0451"
+    assert readings[0].metadata["temperature_c"] == pytest.approx(expected_temperature)
+    assert readings[0].metadata["k_factor"] == EC_K_FACTOR
     assert readings[1].metadata["engineering_conversion"] == "pt1000_qa_linear_calibration"
     assert reader.health()["acquisition_running"]
 

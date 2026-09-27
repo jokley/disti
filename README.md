@@ -163,10 +163,11 @@ The first two single-ended inputs are configured as follows: ADS1115 A0 is
 `ec-1` (`ec`) from the DFRobot EC conversion board, and A1 is `ec-temp`
 (`temperature`) from its separate PT1000 conversion board. A2 and A3 remain
 electrically available but unassigned. DISTI stores the signed ADC count and
-uncalibrated millivolts for both inputs. Because no validated EC or PT1000
-formula exists yet, `value` is also the raw millivolt signal with unit `mV`,
-and metadata explicitly says that engineering conversion is not configured.
-Calibration and temperature compensation must remain downstream.
+raw millivolts for both inputs. The A1 `value` uses the QA-calibrated PT1000
+linear conversion. The A0 `value` is conductivity in `µS/cm`, calculated with
+the official DFRobot_ECPRO SEN0451 conversion and compensated to 25 °C using
+the A1 temperature. Its explicit K factor is `1.3271298516320476`, calibrated
+from 1617.6 mV in 1413 µS/cm-at-25-°C solution measured at 21.32 °C.
 
 The device-local settings are:
 
