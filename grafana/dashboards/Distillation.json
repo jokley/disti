@@ -3,17 +3,25 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
-        "target": { "limit": 100, "matchAny": false, "tags": [], "type": "dashboard" },
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
         "type": "dashboard"
       }
     ]
   },
-  "description": "Operative Brennansicht mit separatem Rohdaten- und Diagnosebereich. Temperaturschwellen sind nur visuelle Referenzen und keine automatische Phasenerkennung.",
+  "description": "Operative Brennansicht mit separatem experimentellem Analysebereich sowie Rohdaten- und Diagnosebereich. Temperaturschwellen sind nur visuelle Referenzen; experimentelle Signale bewirken weder Phasenerkennung noch Steuerung.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -22,11 +30,16 @@
   "liveNow": false,
   "panels": [
     {
-      "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
       "description": "Aktuellster Messwert im gewählten Zeitraum. Die übernommenen Temperaturschwellen 70/80/90 °C dienen ausschließlich als visuelle Orientierung und stellen keine Vorlauf-/Mittellauf-/Nachlauf-Erkennung dar.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 1,
           "mappings": [],
           "max": 110,
@@ -34,28 +47,54 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "dark-blue", "value": null },
-              { "color": "blue", "value": 70 },
-              { "color": "yellow", "value": 80 },
-              { "color": "orange", "value": 90 }
+              {
+                "color": "dark-blue",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 70
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "orange",
+                "value": 90
+              }
             ]
           },
           "unit": "celsius"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "options": {
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showThresholdLabels": true,
         "showThresholdMarkers": true,
         "sizing": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
           "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT time, value AS \"Kesseldampf\"\nFROM sensor_measurements\nWHERE sensor_id = 'vapor-temp'\n  AND $__timeFilter(time)\nORDER BY time DESC\nLIMIT 1;",
@@ -66,11 +105,16 @@
       "type": "gauge"
     },
     {
-      "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
       "description": "Aktuellster Messwert im gewählten Zeitraum; 14/18/22 °C sind visuelle Referenzschwellen.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 1,
           "mappings": [],
           "max": 30,
@@ -78,28 +122,54 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "blue", "value": null },
-              { "color": "light-blue", "value": 14 },
-              { "color": "green", "value": 18 },
-              { "color": "orange", "value": 22 }
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "light-blue",
+                "value": 14
+              },
+              {
+                "color": "green",
+                "value": 18
+              },
+              {
+                "color": "orange",
+                "value": 22
+              }
             ]
           },
           "unit": "celsius"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
       "id": 2,
       "options": {
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showThresholdLabels": true,
         "showThresholdMarkers": true,
         "sizing": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
           "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT time, value AS \"Kühler\"\nFROM sensor_measurements\nWHERE sensor_id = 'cooler-temp'\n  AND $__timeFilter(time)\nORDER BY time DESC\nLIMIT 1;",
@@ -110,48 +180,91 @@
       "type": "gauge"
     },
     {
-      "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
       "description": "Aktuellste kalibrierte Leitfähigkeit und zugehörige EC-Temperatur im gewählten Zeitraum. Für EC werden bewusst keine Gut-/Schlecht-Bereiche definiert.",
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
           "decimals": 1,
           "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
           "unit": "µS/cm"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "EC-Temperatur" },
+            "matcher": {
+              "id": "byName",
+              "options": "EC-Temperatur"
+            },
             "properties": [
-              { "id": "unit", "value": "celsius" },
-              { "id": "color", "value": { "fixedColor": "text", "mode": "fixed" } }
+              {
+                "id": "unit",
+                "value": "celsius"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "text",
+                  "mode": "fixed"
+                }
+              }
             ]
           }
         ]
       },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
       "id": 3,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "center",
         "orientation": "vertical",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showPercentChange": false,
         "textMode": "value_and_name",
         "wideLayout": true
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
           "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT time, value AS \"EC\"\nFROM sensor_measurements\nWHERE sensor_id = 'ec-1'\n  AND $__timeFilter(time)\nORDER BY time DESC\nLIMIT 1;",
           "refId": "A"
         },
         {
-          "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
           "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT time, value AS \"EC-Temperatur\"\nFROM sensor_measurements\nWHERE sensor_id = 'ec-temp'\n  AND $__timeFilter(time)\nORDER BY time DESC\nLIMIT 1;",
@@ -162,11 +275,17 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
       "description": "Kalibrierte Kesseldampftemperatur, dynamisch nach dem Grafana-Zeitintervall aggregiert.",
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "orange", "mode": "fixed" },
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
           "custom": {
             "axisBorderShow": false,
             "axisCenteredZero": false,
@@ -177,33 +296,69 @@
             "drawStyle": "line",
             "fillOpacity": 12,
             "gradientMode": "opacity",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 3,
-            "scaleDistribution": { "type": "linear" },
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "decimals": 1,
           "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
           "unit": "celsius"
         },
         "overrides": []
       },
-      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 8 },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
       "id": 4,
       "interval": "5s",
       "options": {
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": false },
-        "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" }
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
           "format": "time_series",
           "interval": "5s",
           "rawQuery": true,
@@ -215,11 +370,17 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
       "description": "Kalibrierte EC-Leitfähigkeit, dynamisch nach dem Grafana-Zeitintervall aggregiert.",
       "fieldConfig": {
         "defaults": {
-          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
           "custom": {
             "axisBorderShow": false,
             "axisCenteredZero": false,
@@ -230,33 +391,69 @@
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "opacity",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 3,
-            "scaleDistribution": { "type": "linear" },
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "decimals": 1,
           "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
           "unit": "µS/cm"
         },
         "overrides": []
       },
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 20 },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
       "id": 5,
       "interval": "5s",
       "options": {
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": false },
-        "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" }
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
           "format": "time_series",
           "interval": "5s",
           "rawQuery": true,
@@ -268,16 +465,605 @@
       "type": "timeseries"
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "id": 9,
+      "panels": [],
+      "title": "Analyse / Experimental",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
+      "description": "Experimentelle, rein lesende Analyse: festes 60-s-Mittel und Änderung zwischen direkt aufeinanderfolgenden Minuten-Buckets. Fehlende Minuten erzeugen eine Lücke statt einer Ableitung. Keine Phasenerkennung oder Steuerungswirkung.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Temperatur",
+            "axisPlacement": "left",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dT/dt (°C/min)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "°C/min"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Änderung"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "id": 10,
+      "interval": "1m",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH minute_values AS (\n  SELECT time_bucket(INTERVAL '1 minute', time) AS time,\n         avg(value)::double precision AS smoothed_value\n  FROM sensor_measurements\n  WHERE sensor_id = 'vapor-temp'\n    AND $__timeFilter(time)\n  GROUP BY 1\n), lagged AS (\n  SELECT time, smoothed_value,\n         lag(smoothed_value) OVER (ORDER BY time) AS previous_value,\n         EXTRACT(EPOCH FROM time - lag(time) OVER (ORDER BY time))::double precision AS elapsed_seconds\n  FROM minute_values\n)\nSELECT time,\n       smoothed_value AS \"Kesseldampf (60-s-Mittel)\",\n       CASE WHEN elapsed_seconds = 60\n            THEN (smoothed_value - previous_value) * 60.0 / NULLIF(elapsed_seconds, 0)\n       END AS \"dT/dt (°C/min)\"\nFROM lagged\nORDER BY time;",
+          "refId": "A"
+        }
+      ],
+      "title": "Kesseldampf – Dynamik",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
+      "description": "Experimentelle, rein lesende Analyse der kalibrierten EC-Werte: festes 60-s-Mittel und Änderung zwischen direkt aufeinanderfolgenden Minuten-Buckets. Fehlende Minuten erzeugen eine Lücke.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Leitfähigkeit",
+            "axisPlacement": "left",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "µS/cm"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dEC/dt (µS/cm/min)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "µS/cm/min"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Änderung"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "id": 11,
+      "interval": "1m",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH minute_values AS (\n  SELECT time_bucket(INTERVAL '1 minute', time) AS time,\n         avg(value)::double precision AS smoothed_value\n  FROM sensor_measurements\n  WHERE sensor_id = 'ec-1'\n    AND $__timeFilter(time)\n  GROUP BY 1\n), lagged AS (\n  SELECT time, smoothed_value,\n         lag(smoothed_value) OVER (ORDER BY time) AS previous_value,\n         EXTRACT(EPOCH FROM time - lag(time) OVER (ORDER BY time))::double precision AS elapsed_seconds\n  FROM minute_values\n)\nSELECT time,\n       smoothed_value AS \"EC (60-s-Mittel)\",\n       CASE WHEN elapsed_seconds = 60\n            THEN (smoothed_value - previous_value) * 60.0 / NULLIF(elapsed_seconds, 0)\n       END AS \"dEC/dt (µS/cm/min)\"\nFROM lagged\nORDER BY time;",
+          "refId": "A"
+        }
+      ],
+      "title": "EC – Dynamik",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
+      "description": "Zeitlich auf feste Minuten-Buckets ausgerichteter Vergleich für visuelle Korrelation. Rein experimentell; keine automatische Klassifikation.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Temperatur",
+            "axisPlacement": "left",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EC (60-s-Mittel)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "µS/cm"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Leitfähigkeit"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "id": 12,
+      "interval": "1m",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '1 minute', time) AS time,\n       avg(value) FILTER (WHERE sensor_id = 'vapor-temp')::double precision AS \"Kesseldampf (60-s-Mittel)\",\n       avg(value) FILTER (WHERE sensor_id = 'ec-1')::double precision AS \"EC (60-s-Mittel)\"\nFROM sensor_measurements\nWHERE sensor_id IN ('vapor-temp', 'ec-1')\n  AND $__timeFilter(time)\nGROUP BY 1\nORDER BY 1;",
+          "refId": "A"
+        }
+      ],
+      "title": "Prozessanalyse",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
+      "description": "Experimentelles Signal aus zeitlich ausgerichteten 60-s-Mitteln: Kesseldampf minus EC-Temperatur. Buckets ohne beide Sensorwerte werden ausgelassen. Es werden weder physikalische Bedeutung noch Schwellen unterstellt.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "yellow",
+            "mode": "fixed"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Temperaturdifferenz",
+            "axisPlacement": "left",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 50
+      },
+      "id": 13,
+      "interval": "1m",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH aligned AS (\n  SELECT time_bucket(INTERVAL '1 minute', time) AS time,\n         avg(value) FILTER (WHERE sensor_id = 'vapor-temp')::double precision AS vapor_temperature,\n         avg(value) FILTER (WHERE sensor_id = 'ec-temp')::double precision AS ec_temperature\n  FROM sensor_measurements\n  WHERE sensor_id IN ('vapor-temp', 'ec-temp')\n    AND $__timeFilter(time)\n  GROUP BY 1\n)\nSELECT time,\n       vapor_temperature - ec_temperature AS \"Kesseldampf minus EC-Temperatur\"\nFROM aligned\nWHERE vapor_temperature IS NOT NULL\n  AND ec_temperature IS NOT NULL\nORDER BY time;",
+          "refId": "A"
+        }
+      ],
+      "title": "Temperaturdifferenz",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "P44368ADAD746BC27"
+      },
+      "description": "Kompakter Trend des festen 60-s-Mittels der Kühlertemperatur zur visuellen Korrelation mit anderen Signalen.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "light-blue",
+            "mode": "fixed"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Temperatur",
+            "axisPlacement": "left",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "light-blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 50
+      },
+      "id": 14,
+      "interval": "1m",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '1 minute', time) AS time,\n       avg(value)::double precision AS \"Kühler (60-s-Mittel)\"\nFROM sensor_measurements\nWHERE sensor_id = 'cooler-temp'\n  AND $__timeFilter(time)\nGROUP BY 1\nORDER BY 1;",
+          "refId": "A"
+        }
+      ],
+      "title": "Kühler – Verlauf",
+      "type": "timeseries"
+    },
+    {
       "collapsed": true,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 58
+      },
       "id": 6,
       "panels": [
         {
-          "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
           "description": "Je Intervall wird der tatsächlich zuletzt gespeicherte raw_mv-Messwert dargestellt; die Aggregation reduziert nur die Visualisierungsdichte und verändert keine gespeicherten Messungen.",
           "fieldConfig": {
             "defaults": {
-              "color": { "mode": "palette-classic" },
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
                 "axisBorderShow": false,
                 "axisCenteredZero": false,
@@ -288,33 +1074,69 @@
                 "drawStyle": "line",
                 "fillOpacity": 4,
                 "gradientMode": "none",
-                "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
                 "lineInterpolation": "linear",
                 "lineWidth": 1,
                 "pointSize": 3,
-                "scaleDistribution": { "type": "linear" },
+                "scaleDistribution": {
+                  "type": "linear"
+                },
                 "showPoints": "auto",
                 "spanNulls": false,
-                "stacking": { "group": "A", "mode": "none" },
-                "thresholdsStyle": { "mode": "off" }
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
               },
               "decimals": 2,
               "mappings": [],
-              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
               "unit": "mvolt"
             },
             "overrides": []
           },
-          "gridPos": { "h": 10, "w": 14, "x": 0, "y": 30 },
+          "gridPos": {
+            "h": 10,
+            "w": 14,
+            "x": 0,
+            "y": 59
+          },
           "id": 7,
           "interval": "5s",
           "options": {
-            "legend": { "calcs": [], "displayMode": "table", "placement": "bottom", "showLegend": true },
-            "tooltip": { "hideZeros": false, "mode": "multi", "sort": "none" }
+            "legend": {
+              "calcs": [],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "none"
+            }
           },
           "targets": [
             {
-              "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+              "datasource": {
+                "type": "postgres",
+                "uid": "P44368ADAD746BC27"
+              },
               "format": "time_series",
               "interval": "5s",
               "rawQuery": true,
@@ -326,31 +1148,92 @@
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+          "datasource": {
+            "type": "postgres",
+            "uid": "P44368ADAD746BC27"
+          },
           "description": "Neuester gespeicherter Datensatz je Sensor, unabhängig vom Dashboard-Zeitfenster, damit auch ausgefallene bzw. alte Sensoren sichtbar bleiben.",
           "fieldConfig": {
             "defaults": {
-              "color": { "mode": "thresholds" },
-              "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
               "mappings": [],
-              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
             },
             "overrides": [
-              { "matcher": { "id": "byName", "options": "Zeitpunkt" }, "properties": [{ "id": "unit", "value": "dateTimeAsIso" }] },
-              { "matcher": { "id": "byName", "options": "Alter" }, "properties": [{ "id": "unit", "value": "s" }] }
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Zeitpunkt"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsIso"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Alter"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  }
+                ]
+              }
             ]
           },
-          "gridPos": { "h": 10, "w": 10, "x": 14, "y": 30 },
+          "gridPos": {
+            "h": 10,
+            "w": 10,
+            "x": 14,
+            "y": 59
+          },
           "id": 8,
           "options": {
             "cellHeight": "sm",
-            "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
             "showHeader": true,
-            "sortBy": [{ "desc": false, "displayName": "Sensor" }]
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "Sensor"
+              }
+            ]
           },
           "targets": [
             {
-              "datasource": { "type": "postgres", "uid": "P44368ADAD746BC27" },
+              "datasource": {
+                "type": "postgres",
+                "uid": "P44368ADAD746BC27"
+              },
               "format": "table",
               "rawQuery": true,
               "rawSql": "SELECT sensor_id AS \"Sensor\",\n       value AS \"Wert\",\n       raw_value AS \"Rohwert\",\n       raw_mv AS \"Rohspannung (mV)\",\n       unit AS \"Einheit\",\n       quality AS \"Qualität\",\n       time AS \"Zeitpunkt\",\n       EXTRACT(EPOCH FROM (now() - time))::double precision AS \"Alter\"\nFROM (\n  SELECT DISTINCT ON (sensor_id)\n         sensor_id, value, raw_value, raw_mv, unit, quality, time\n  FROM sensor_measurements\n  WHERE sensor_id IN ('vapor-temp', 'cooler-temp', 'ec-1', 'ec-temp')\n  ORDER BY sensor_id, time DESC\n) AS latest\nORDER BY sensor_id;",
@@ -367,13 +1250,22 @@
   ],
   "refresh": "10s",
   "schemaVersion": 42,
-  "tags": ["distillation", "operations", "engineering"],
-  "templating": { "list": [] },
-  "time": { "from": "now-12h", "to": "now" },
+  "tags": [
+    "distillation",
+    "operations",
+    "engineering"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-12h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "Distillation",
   "uid": "4xbsxFWgk",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
