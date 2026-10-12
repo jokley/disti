@@ -16,7 +16,8 @@ def test_persisted_analysis_panels():
         sql=p['targets'][0]['rawSql']
         assert 'FROM process_analysis' in sql
         assert '$__timeFilter(time)' in sql
-        assert 'analysis_version' in sql and 'analysis_run' in sql
+        assert 'analysis_version' in sql and 'analysis_detector' in sql
+        assert 'run_id' not in sql and 'analysis_run' not in sql
         assert not any(s in sql.lower() for s in ('sensor_measurements','lag(', 'avg(', 'with ', 'insert ', 'update ', 'delete '))
     assert 'ORDER BY time DESC LIMIT 1' in analysis[-1]['targets'][0]['rawSql']
 
@@ -38,3 +39,7 @@ def test_comparison_panel_reads_persisted_trend_dynamics():
     assert 'cusum_s' not in sql and 'lag(' not in sql.lower()
     accel=next(o for o in panel['fieldConfig']['overrides'] if o['matcher']['options']=='Trendänderung.*')
     assert {'id':'unit','value':'suffix:mV/min²'} in accel['properties']
+
+
+def test_analysis_has_no_run_selector():
+    assert 'analysis_run' not in {v['name'] for v in dashboard()['templating']['list']}

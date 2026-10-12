@@ -9,8 +9,8 @@ from disti.api import create_app
 
 T=datetime(2026,1,1,tzinfo=timezone.utc)
 
-def p(i,t=82,mv=100,pt=1000,rid=None,invalid=False):
-    return AnalysisInput(T+timedelta(seconds=20*i),t,mv,pt,rid,invalid)
+def p(i,t=82,mv=100,pt=1000,invalid=False):
+    return AnalysisInput(T+timedelta(seconds=20*i),t,mv,pt,invalid)
 
 def fast(**changes):
     return replace(AnalysisConfig(),baseline_delay_seconds=0,baseline_warmup_samples=2,**changes)
@@ -114,17 +114,16 @@ def test_end_restart_reset(temperature):
         a.update(p(3,t=74)); i=4
     else: i=2
     assert a.update(p(i)).process_state==S.AUFHEIZEN
-    a.reset('new')
+    a.reset()
     assert a.last_time is None and a.mu is None and a.plateau_time is None
-    assert a.update(p(0,rid='new')).process_state==S.AUFHEIZEN
+    assert a.update(p(0)).process_state==S.AUFHEIZEN
 
-def test_order_run_and_no_future():
+def test_order_and_no_future():
     a=ProcessAnalyzer();prefix=[a.update(p(i,mv=100+i)) for i in range(5)]
     a.update(p(5,mv=180))
     b=ProcessAnalyzer()
     assert prefix==[b.update(p(i,mv=100+i)) for i in range(5)]
     with pytest.raises(ValueError): a.update(p(5))
-    with pytest.raises(ValueError): a.update(p(6,rid='other'))
     with pytest.raises(ValueError): ProcessAnalyzer().update(replace(p(0),time=T.replace(tzinfo=None)))
 
 def test_optional_strict_plateau():
@@ -135,7 +134,7 @@ def test_optional_strict_plateau():
 def test_missing_bucket_generation():
     rows=[{'time':T,'vapor_temp':82,'raw_mv':100,'pt_raw_mv':1000},
           {'time':T+timedelta(seconds=40),'vapor_temp':82,'raw_mv':100,'pt_raw_mv':1000}]
-    points=list(bucket_points(rows,'run',T+timedelta(seconds=60),AnalysisConfig()))
+    points=list(bucket_points(rows,T+timedelta(seconds=60),AnalysisConfig()))
     assert len(points)==3 and points[1].raw_mv is None
 
 @pytest.fixture
@@ -147,8 +146,9 @@ def analysis_repo(repo):
     conn=repo.connection_factory();conn.executescript(sql);conn.close()
     return repo
 
-def seed(repo, rid='11111111-1111-1111-1111-111111111111'):
-    repo._execute("INSERT INTO distillation_runs(id,run_type,status,started_at) VALUES(%s,%s,%s,%s)",(rid,'other','completed',T.isoformat()),fetch=None)
+def seed(repo, rid=None):
+    if rid is not None:
+        repo._execute("INSERT INTO distillation_runs(id,run_type,status,started_at) VALUES(%s,%s,%s,%s)",(rid,'other','completed',T.isoformat()),fetch=None)
     for sensor in ('vapor-temp','ec-1','ec-temp'): repo.ensure_sensor(sensor,sensor,'test')
     from disti.hardware.base import SensorReading
     for i in range(40):
@@ -158,24 +158,24 @@ def seed(repo, rid='11111111-1111-1111-1111-111111111111'):
 
 def test_rebuild_idempotence_subrange_live_and_raw_immutable(analysis_repo):
     repo=analysis_repo;rid=seed(repo)
-    before=repo.replay_measurements(rid)
+    before=repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
     service=AnalysisService(repo)
     start,end=T,T+timedelta(seconds=800)
-    assert service.rebuild(start,end,rid)['points_written']==40
+    assert service.rebuild(start,end)['points_written']==40
     first=repo._execute('SELECT * FROM process_analysis ORDER BY time')
-    service.rebuild(T+timedelta(seconds=600),end,rid)
+    service.rebuild(T+timedelta(seconds=600),end)
     assert repo._execute('SELECT * FROM process_analysis ORDER BY time')==first
-    assert repo.replay_measurements(rid)==before
-    a=ProcessAnalyzer();a.reset(rid)
-    results=[a.update(p(i,rid=rid)) for i in range(40)]
+    assert repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')==before
+    a=ProcessAnalyzer()
+    results=[a.update(p(i)) for i in range(40)]
     assert json.loads(first[-1]['details'])==asdict(results[-1].details)
-    assert service.save_completed_point(a,p(40,rid=rid)).time==p(40).time
+    assert service.save_completed_point(a,p(40)).time==p(40).time
 
 def test_rebuild_route_validation_and_success(analysis_repo):
     rid=seed(analysis_repo);client=create_app(analysis_repo).test_client()
     for data in ({},[],{'from':T.isoformat(),'to':T.isoformat()}, {'from':'bad','to':'bad'}, {'from':T.isoformat(),'to':T.isoformat(),'algo_version':'future'}):
         assert client.post('/api/analysis/rebuild',json=data).status_code==400
-    response=client.post('/api/analysis/rebuild',json={'from':T.isoformat(),'to':(T+timedelta(seconds=800)).isoformat(),'run_id':rid,'algo_version':'cusum-v1'})
+    response=client.post('/api/analysis/rebuild',json={'from':T.isoformat(),'to':(T+timedelta(seconds=800)).isoformat(),'algo_version':'cusum-v1'})
     assert response.status_code==200 and response.json['points_written']==40
 
 def test_nonfinite_and_quality_invalid(analysis_repo):
@@ -185,10 +185,10 @@ def test_nonfinite_and_quality_invalid(analysis_repo):
     assert a.update(p(1,invalid=True)).process_state==S.SENSOR_UNGUELTIG
     rid=seed(analysis_repo)
     analysis_repo._execute("UPDATE sensor_measurements SET quality='simulated'",fetch=None)
-    rows=analysis_repo.analysis_buckets(rid,T+timedelta(seconds=800),20)
+    rows=analysis_repo.analysis_buckets(T+timedelta(seconds=800),20)
     assert not rows[0]['sensor_invalid']
     analysis_repo._execute("UPDATE sensor_measurements SET quality='error' WHERE sensor_id='ec-1'",fetch=None)
-    assert analysis_repo.analysis_buckets(rid,T+timedelta(seconds=800),20)[0]['sensor_invalid']
+    assert analysis_repo.analysis_buckets(T+timedelta(seconds=800),20)[0]['sensor_invalid']
 
 def test_baseline_frozen_is_latched_and_alarm_threshold_strict():
     a=ProcessAnalyzer(fast())
@@ -203,16 +203,18 @@ def test_baseline_frozen_is_latched_and_alarm_threshold_strict():
     r=a.update(p(5,t=85,mv=100+sigma*(6+.75)))
     assert r.details.cusum_s==pytest.approx(6) and not r.detector_alarm
 
-def test_rebuild_separates_runs_and_excludes_partial_buckets(analysis_repo):
-    rid=seed(analysis_repo)
+def test_rebuild_ignores_run_assignments_and_excludes_partial_buckets(analysis_repo):
+    seed(analysis_repo)
     service=AnalysisService(analysis_repo)
     r=service.rebuild(T,T+timedelta(seconds=799))
-    assert r['runs']==[rid] and r['points_written']==39
-    other=seed(analysis_repo,'22222222-2222-2222-2222-222222222222')
+    assert r['points_written']==39 and 'runs' not in r
+    # Assigned readings and NULL readings share one temporal series, never
+    # reset or duplicate analysis simply because an acquisition run changes.
+    seed(analysis_repo,'22222222-2222-2222-2222-222222222222')
     both=service.rebuild(T,T+timedelta(seconds=799))
-    assert set(both['runs'])=={rid,other} and both['points_written']==78
-    with pytest.raises(ValueError): service.rebuild(T,T+timedelta(seconds=800),'unknown')
+    assert both['points_written']==39
     with pytest.raises(ValueError): service.save_completed_point(ProcessAnalyzer(),replace(p(0),time=T+timedelta(seconds=1)))
+
 
 def test_exact_warmup_and_configured_z_clip():
     a=ProcessAnalyzer()
@@ -240,12 +242,12 @@ def test_baseline_uses_elapsed_buckets_without_gap_imputation():
 def test_live_reads_one_bucket_and_matches_rebuild(analysis_repo):
     rid=seed(analysis_repo)
     service=AnalysisService(analysis_repo)
-    analyzer=ProcessAnalyzer();analyzer.reset(rid)
+    analyzer=ProcessAnalyzer()
     for i in range(40): service.process_completed_bucket(analyzer,p(i).time)
     live=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
-    assert service.rebuild(T,T+timedelta(seconds=800),rid)['points_written']==40
+    assert service.rebuild(T,T+timedelta(seconds=800))['points_written']==40
     assert live==analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
-    rows=analysis_repo.analysis_buckets(rid,T+timedelta(seconds=40),20,start=T+timedelta(seconds=20))
+    rows=analysis_repo.analysis_buckets(T+timedelta(seconds=40),20,start=T+timedelta(seconds=20))
     assert len(rows)==1 and rows[0]['time']==p(1).time
     assert service.process_completed_bucket(analyzer,p(40).time).process_state==S.DATENLUECKE
 
@@ -325,15 +327,121 @@ def test_trend_dynamics_are_causal_and_diagnostic_only():
 def test_trend_dynamics_persisted_identically_in_live_and_rebuild(analysis_repo):
     rid=seed(analysis_repo)
     for i in range(40):
-        analysis_repo._execute("UPDATE sensor_measurements SET raw_mv=%s WHERE run_id=%s AND sensor_id='ec-1' AND time=%s",
-                               (20+.025*(i/3)**2,rid,p(i).time.isoformat()),fetch=None)
+        analysis_repo._execute("UPDATE sensor_measurements SET raw_mv=%s WHERE sensor_id='ec-1' AND time=%s",
+                               (20+.025*(i/3)**2,p(i).time.isoformat()),fetch=None)
     service=AnalysisService(analysis_repo)
-    a=ProcessAnalyzer();a.reset(rid)
+    a=ProcessAnalyzer()
     for i in range(40): service.process_completed_bucket(a,p(i).time)
     live=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
     assert live[-1]['trend_accel_3m']==pytest.approx(.05)
     assert live[-1]['trend_accel_5m']==pytest.approx(.05)
     assert live[0]['trend_accel_3m'] is None
     assert 'trend_accel_3m' not in json.loads(live[-1]['details'])
-    service.rebuild(T,T+timedelta(seconds=800),rid)
+    service.rebuild(T,T+timedelta(seconds=800))
     assert live==analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
+
+
+def test_historical_null_runs_warmup_and_only_requested_window(analysis_repo):
+    historical=datetime(2026,10,9,12,tzinfo=timezone.utc)
+    # Shift the fixture to the actual historical date, without assigning runs.
+    seed(analysis_repo)
+    for i in range(40):
+        analysis_repo._execute('UPDATE sensor_measurements SET time=%s WHERE time=%s',
+                               ((historical+timedelta(seconds=20*i)).isoformat(),p(i).time.isoformat()),fetch=None)
+    before=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
+    assert all(row['run_id'] is None for row in before)
+    service=AnalysisService(analysis_repo)
+    start=historical+timedelta(seconds=601)
+    end=historical+timedelta(seconds=799)
+    assert service.rebuild(start,end)['points_written']==8
+    rows=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
+    expected=ProcessAnalyzer()
+    results=[expected.update(replace(p(i),time=historical+timedelta(seconds=20*i))) for i in range(39)]
+    assert rows[0]['raw_mv_5m']==100 and rows[0]['trend_3m']==0
+    assert rows[-1]['trend_accel_5m']==0
+    assert json.loads(rows[-1]['details'])==asdict(results[-1].details)
+    assert all(start <= datetime.fromisoformat(row['time']) < end for row in rows)
+    assert analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')==before
+
+
+def test_rebuild_replaces_stale_rows_and_preserves_other_ranges_and_versions(analysis_repo):
+    seed(analysis_repo)
+    service=AnalysisService(analysis_repo)
+    service.rebuild(T,T+timedelta(seconds=800))
+    analysis_repo.save_analysis([replace(ProcessAnalyzer().update(p(30)),algo_version='other-version')])
+    # A stale row inside a now-incomplete final bucket must be removed as well.
+    analysis_repo.save_analysis([ProcessAnalyzer().update(p(40))])
+    analysis_repo._execute('UPDATE process_analysis SET raw_mv=-1 WHERE time=%s AND algo_version=%s',
+                           (p(30).time.isoformat(),'cusum-v1'),fetch=None)
+    before=analysis_repo._execute('SELECT * FROM process_analysis WHERE time < %s ORDER BY time', (p(30).time.isoformat(),))
+    service.rebuild(p(30).time,p(40).time+timedelta(seconds=1))
+    rows=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time,algo_version')
+    assert len(rows)==41
+    assert next(r for r in rows if r['time']==p(30).time.isoformat() and r['algo_version']=='cusum-v1')['raw_mv']==100
+    assert any(r['algo_version']=='other-version' for r in rows)
+    assert all(r['time']!=p(40).time.isoformat() for r in rows)
+    assert analysis_repo._execute('SELECT * FROM process_analysis WHERE time < %s ORDER BY time', (p(30).time.isoformat(),))==before
+
+
+def test_empty_rebuild_removes_stale_analysis(analysis_repo):
+    analysis_repo.save_analysis([ProcessAnalyzer().update(p(0))])
+    assert AnalysisService(analysis_repo).rebuild(T,p(1).time)['points_written']==0
+    assert analysis_repo._execute('SELECT * FROM process_analysis')==[]
+
+
+def test_replacement_rolls_back_on_insert_failure(analysis_repo):
+    import sqlite3
+    service=AnalysisService(analysis_repo)
+    seed(analysis_repo)
+    service.rebuild(T,p(40).time)
+    before=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
+    good=ProcessAnalyzer().update(p(0))
+    bad=replace(ProcessAnalyzer().update(p(1)),detector_score=None)
+    with pytest.raises(sqlite3.IntegrityError):
+        analysis_repo.save_analysis([good,bad],replace_range=(T,p(40).time,'cusum','cusum-v1'))
+    assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==before
+
+
+def test_multiple_brands_live_replay_and_long_state_history(analysis_repo):
+    from disti.hardware.base import SensorReading
+    for sensor in ('vapor-temp','ec-1','ec-temp'):
+        analysis_repo.ensure_sensor(sensor,sensor,'test')
+    # >30 min history matters for the latched baseline, not just trend windows.
+    points=[p(i,t=82 if i<60 else 85,mv=100 if i<60 else 112) for i in range(120)]
+    points += [p(120,t=70),p(121,t=70)]
+    # A gap and a cold interval separate the next heating process.
+    points += [p(i,t=70 if i<130 else 82,mv=90) for i in range(125,180)]
+    for point in points:
+        for sensor,value,mv in [('vapor-temp',point.vapor_temp,None),('ec-1',1,point.raw_mv),('ec-temp',40,point.pt_raw_mv)]:
+            analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',
+                value,'test',timestamp=point.time,raw_mv=mv))
+    service=AnalysisService(analysis_repo)
+    analyzer=ProcessAnalyzer()
+    live_results=[service.process_completed_bucket(analyzer,p(i).time) for i in range(180)]
+    assert live_results[119].detector_alarm
+    assert live_results[120].process_state==S.ENDE
+    assert live_results[123].process_state==S.ENDE
+    assert live_results[130].process_state==S.AUFHEIZEN
+    assert live_results[130].details.baseline_mu is None
+    assert live_results[179].details.baseline_mu==90
+    live=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
+    assert service.rebuild(T,p(180).time)['points_written']==180
+    assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==live
+    # Subrange starts >30 min into a hot brand: earlier frozen mu must survive.
+    assert service.rebuild(p(105).time,p(120).time)['points_written']==15
+    assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==live
+
+
+def test_live_rejects_open_buckets_and_config_mismatch(analysis_repo):
+    service=AnalysisService(analysis_repo)
+    with pytest.raises(ValueError,match='not complete'):
+        service.process_completed_bucket(ProcessAnalyzer(),datetime(2099,1,1,tzinfo=timezone.utc))
+    with pytest.raises(ValueError,match='config must match'):
+        service.save_completed_point(ProcessAnalyzer(fast()),p(0))
+
+
+def test_api_rejects_run_filter_and_naive_timestamps(analysis_repo):
+    client=create_app(analysis_repo).test_client()
+    base={'from':T.isoformat(),'to':p(40).time.isoformat()}
+    assert client.post('/api/analysis/rebuild',json={**base,'run_id':'11111111-1111-1111-1111-111111111111'}).status_code==400
+    assert client.post('/api/analysis/rebuild',json={**base,'from':'2026-01-01T00:00:00'}).status_code==400

@@ -157,16 +157,7 @@ class Repository:
                       (eid, (timestamp or now()).isoformat(), run_id, actuator_id, event_type, json.dumps(details)), fetch=None)
         return self._execute("SELECT * FROM actuator_events WHERE id=%s", (eid,), "one")
 
-    def analysis_runs(self, start, end, run_id=None):
-        if run_id is not None:
-            return self._execute("SELECT id, ended_at FROM distillation_runs WHERE id=%s", (run_id,))
-        return self._execute(
-            "SELECT DISTINCT r.id, r.ended_at FROM distillation_runs r "
-            "JOIN sensor_measurements m ON m.run_id=r.id "
-            "WHERE m.time >= %s AND m.time < %s ORDER BY r.id",
-            (start.isoformat(), end.isoformat()))
-
-    def analysis_buckets(self, run_id, end, seconds, valid_qualities=('good', 'simulated'), start=None):
+    def analysis_buckets(self, end, seconds, valid_qualities=('good', 'simulated'), start=None):
         # Aggregation only. Features and all process formulas live in process_analysis.
         lower_bound = ' AND time >= %s' if start is not None else ''
         lower_params = (start.isoformat(),) if start is not None else ()
@@ -178,16 +169,16 @@ class Repository:
                   avg(raw_mv) FILTER (WHERE sensor_id='ec-temp') AS pt_raw_mv,
                   bool_or(quality IS NULL OR NOT (quality = ANY(%s))) AS sensor_invalid
                 FROM sensor_measurements
-                WHERE run_id=%s AND time < %s
+                WHERE time < %s
                   AND sensor_id IN ('vapor-temp','ec-1','ec-temp')
                 """ + lower_bound + ' GROUP BY 1 ORDER BY 1',
-                (f'{seconds} seconds', list(valid_qualities), run_id, end.isoformat()) + lower_params)
+                (f'{seconds} seconds', list(valid_qualities), end.isoformat()) + lower_params)
         from collections import defaultdict
         from statistics import fmean
         from disti.process_analysis.service import timestamp, floor_bucket
         rows = self._execute("SELECT time,sensor_id,value,raw_mv,quality FROM sensor_measurements "
-                             "WHERE run_id=%s AND time < %s AND sensor_id IN ('vapor-temp','ec-1','ec-temp')" + lower_bound + ' ORDER BY time',
-                             (run_id, end.isoformat()) + lower_params)
+                             "WHERE time < %s AND sensor_id IN ('vapor-temp','ec-1','ec-temp')" + lower_bound + ' ORDER BY time',
+                             (end.isoformat(),) + lower_params)
         groups = defaultdict(list)
         for row in rows:
             groups[floor_bucket(timestamp(row['time']), seconds)].append(row)
@@ -200,10 +191,10 @@ class Repository:
             result.append(item)
         return result
 
-    def save_analysis(self, results):
-        """Atomic batch upsert, including corrections on repeated historical rebuilds."""
+    def save_analysis(self, results, replace_range=None):
+        """Atomically replace a requested range, or upsert completed live points."""
         from dataclasses import asdict
-        if not results:
+        if not results and replace_range is None:
             return
         rows = []
         for result in results:
@@ -213,16 +204,24 @@ class Repository:
             row['process_state'] = result.process_state.value
             row['details'] = json.dumps(row['details'], allow_nan=False)
             rows.append(row)
-        columns = list(rows[0])
+        columns = list(rows[0]) if rows else []
         placeholders = ','.join(['?' if self.sqlite else '%s']*len(columns))
-        updates = ','.join(f'{col}=excluded.{col}' for col in columns if col not in ('run_id','time','detector_name','algo_version'))
-        sql = f"INSERT INTO process_analysis ({','.join(columns)}) VALUES ({placeholders}) ON CONFLICT(run_id,time,detector_name,algo_version) DO UPDATE SET {updates}"
+        updates = ','.join(f'{col}=excluded.{col}' for col in columns if col not in ('time','detector_name','algo_version'))
+        sql = f"INSERT INTO process_analysis ({','.join(columns)}) VALUES ({placeholders}) ON CONFLICT(time,detector_name,algo_version) DO UPDATE SET {updates}"
         conn = self.connection_factory()
         try:
             with conn:
                 cur = conn.cursor()
                 try:
-                    cur.executemany(sql, [tuple(row[col] for col in columns) for row in rows])
+                    if replace_range is not None:
+                        start, end, detector_name, algo_version = replace_range
+                        delete = ("DELETE FROM process_analysis WHERE time >= %s AND time < %s "
+                                  "AND detector_name=%s AND algo_version=%s")
+                        if self.sqlite:
+                            delete = delete.replace('%s', '?')
+                        cur.execute(delete, (start.isoformat(), end.isoformat(), detector_name, algo_version))
+                    if rows:
+                        cur.executemany(sql, [tuple(row[col] for col in columns) for row in rows])
                 finally:
                     cur.close()
         finally:

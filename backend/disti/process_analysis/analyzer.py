@@ -12,8 +12,7 @@ class ProcessAnalyzer:
         self.config = config
         self.reset()
 
-    def reset(self, run_id: str | None = None) -> None:
-        self.run_id = run_id
+    def reset(self) -> None:
         self.last_time = None
         self.active = False
         self.ended = False
@@ -48,9 +47,6 @@ class ProcessAnalyzer:
             raise ValueError('timezone-aware timestamps required')
         if self.last_time is not None and point.time <= self.last_time:
             raise ValueError('inputs must be strictly chronological')
-        if self.last_time is not None and point.run_id != self.run_id:
-            raise ValueError('reset analyzer before changing run_id')
-        self.run_id = point.run_id
         gap = self.last_time is not None and (point.time-self.last_time).total_seconds() != c.bucket_seconds
         self.last_time = point.time
         f, z = Features(), None
@@ -122,5 +118,5 @@ class ProcessAnalyzer:
         details = DetectorDetails(self.mu, self.var, sigma, self.baseline_samples, self.baseline_frozen, z, self.s,
                                   (point.time-self.plateau_time).total_seconds() if self.plateau_time else None)
         physical = tuple(v if v is None or math.isfinite(v) else None for v in values)
-        return AnalysisResult(point.time, self.run_id, *physical, f,
+        return AnalysisResult(point.time, *physical, f,
                               self.detector_name, c.algo_version, min(self.s/c.cusum_h, c.score_max), self.alarm, state, self.ended, details)

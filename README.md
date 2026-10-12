@@ -335,7 +335,9 @@ for direct Grafana queries.
 
 The experimental process analyzer is isolated in `disti.process_analysis`.
 `POST /api/analysis/rebuild` replays completed 20-second raw-data buckets through
-the same engine prepared for incremental live processing. Migration 004 stores
+the same engine prepared for incremental live processing, independently of run IDs
+(including NULL run assignments). Rebuilds warm up from available sensor history
+and atomically replace only the requested time range. Migration 004 stores
 versioned generic detector outputs in `process_analysis`; the experimental
 Grafana panels read those outputs. No automatic cuts or notifications are enabled.
 See [process analysis documentation](docs/grafana-experimental-analysis.md) for

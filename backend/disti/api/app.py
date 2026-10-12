@@ -138,7 +138,6 @@ def create_app(repository=None):
 
     @app.post("/api/analysis/rebuild")
     def analysis_rebuild():
-        from uuid import UUID
         from disti.process_analysis import AnalysisConfig
         from disti.process_analysis.service import AnalysisService
         data = request.get_json(silent=True)
@@ -147,10 +146,11 @@ def create_app(repository=None):
         try:
             if data.get("algo_version", "cusum-v1") != "cusum-v1":
                 raise ValueError("unsupported algo_version")
-            run_id = str(UUID(data["run_id"])) if data.get("run_id") else None
+            if "run_id" in data:
+                raise ValueError("run_id is not supported; use from and to")
             if "from" not in data or "to" not in data:
                 raise ValueError("from and to are required")
-            result = AnalysisService(repo, AnalysisConfig()).rebuild(data["from"], data["to"], run_id)
+            result = AnalysisService(repo, AnalysisConfig()).rebuild(data["from"], data["to"])
         except (ValueError, TypeError, AttributeError) as exc:
             return jsonify(error=str(exc)), 400
         return jsonify(result)
