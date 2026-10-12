@@ -8,7 +8,6 @@ class AnalysisInput:
     vapor_temp: float | None
     raw_mv: float | None
     pt_raw_mv: float | None
-    run_id: str | None = None
     sensor_invalid: bool = False
 
 @dataclass(frozen=True)
@@ -38,7 +37,6 @@ class DetectorDetails:
 @dataclass(frozen=True)
 class AnalysisResult:
     time: datetime
-    run_id: str | None
     vapor_temp: float | None
     raw_mv: float | None
     pt_raw_mv: float | None

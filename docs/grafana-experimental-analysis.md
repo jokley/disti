@@ -33,13 +33,13 @@ analyzer_type=OtherAnalyzer)` ist der kleine Austauschpunkt; keine Registry oder
 Plugin-Factory. Für weitere Detectoren dürfen deren interne typisierte Details
 angepasst werden; die generischen DB-Spalten bleiben erhalten. Die explizite
 API-Versionsprüfung muss bei Freigabe einer neuen Implementierung erweitert
-werden. Parallelbetrieb bedeutet getrennte Analyzer-Instanzen pro Run/Detector/Version.
+werden. Parallelbetrieb bedeutet getrennte Analyzer-Instanzen pro Detector/Version.
 
 ## C. Schema, Migration und Inbetriebnahme
 
 `004_process_analysis.sql` legt eine additive PostgreSQL-Tabelle an:
 
-- Schlüssel: `(run_id, time, detector_name, algo_version)`.
+- Schlüssel: `(time, detector_name, algo_version)`.
 - Physik: `vapor_temp`, `raw_mv`, `pt_raw_mv`, `dtdt`, geglättete EC-Werte.
 - Features: Minimum, Abstand vom Minimum, drei Trends und Trendänderungen über eine Minute.
 - Detector: Name, Version, generischer Score, boolescher Alarm.
@@ -48,18 +48,18 @@ werden. Parallelbetrieb bedeutet getrennte Analyzer-Instanzen pro Run/Detector/V
   einschließlich Mittelwert, Varianz, Sigma, Warmup-Zähler, Freeze, z, S und
   Sekunden seit Plateau.
 
-`run_id` ist bewusst nicht NULL und verweist auf einen bestehenden Brand.
-Messungen ohne Run-Zuordnung werden nicht analysiert und nicht nachträglich
-verändert. Die PK erlaubt mehrere Detectoren und Versionen pro Analysezeitpunkt.
-Ein zusätzlicher Index auf `(detector_name, algo_version, time DESC, run_id)`
-unterstützt Grafana. Der vorhandene Rohdatenindex
-`(sensor_id, time DESC)` sowie `(run_id, time DESC)` wird genutzt; kein weiterer
-Rohdatenindex und keine Veränderung am Hypertable.
+`run_id` wurde aus `process_analysis`, AnalysisInput und AnalysisResult entfernt.
+Auch Rohmessungen mit `sensor_measurements.run_id = NULL` werden analysiert.
+Die PK erlaubt mehrere Detectoren und Versionen pro Analysezeitpunkt.
+Ein zusätzlicher Index auf `(detector_name, algo_version, time DESC)` unterstützt
+Grafana. Der vorhandene Rohdatenindex `(sensor_id, time DESC)` bleibt erhalten;
+keine Veränderung am Rohdaten-Hypertable.
 
-Ein Batch-Upsert läuft in einer Transaktion. Derselbe Rebuild ersetzt vorhandene
-Werte derselben Identität; andere Versionen bleiben erhalten. Die Rohdaten
-werden ausschließlich gelesen. Für sehr lange Zeiträume Rebuilds pro Brand
-aufrufen: Buckets und Ergebnisse werden derzeit im Speicher gehalten.
+Rebuilds löschen ausschließlich den angeforderten Bereich `[from, to)` für
+Detector/Version und schreiben die neuen Ergebnisse in derselben Transaktion.
+Auch veraltete Zeilen ohne neu berechenbaren Bucket werden entfernt. Andere
+Zeiträume und Versionen bleiben erhalten. Live-Punkte verwenden denselben PK
+mit Upsert. Rohdaten werden ausschließlich gelesen.
 
 Nach Bereitstellung des aktualisierten Backends im bestehenden Stack:
 
@@ -75,13 +75,14 @@ Dashboard-Daten entstehen zunächst durch Rebuild-Aufrufe.
 
 ## D. Analyzer-State und Berechnungsreihenfolge
 
-Eine Instanz gehört genau einem Run. `reset(run_id)` löscht Zeitfenster,
-Prozess-/Endzustand, Plateau, Tmax, Fehlerdauer, Baseline, S und Alarm.
-Zeitstempel müssen Zeitzonen enthalten und streng steigen; ein Run-Wechsel
-erfordert reset. Die API normalisiert Eingaben nach UTC.
+Eine Instanz verarbeitet die kontinuierliche Sensor-Zeitreihe, auch über mehrere
+Brände. `reset()` löscht Zeitfenster, Prozess-/Endzustand, Plateau, Tmax,
+Fehlerdauer, Baseline, S und Alarm. Zeitstempel müssen Zeitzonen enthalten und
+streng steigen. Die API normalisiert Eingaben nach UTC; Run-Zuordnungen haben
+keinen Einfluss auf den Analyzer.
 
 1. Datenlücke oder ungültiger Sensor: keine neuen Features/Detector-Entscheidungen.
-2. Gültiger Brandstart bei T >= 75 °C; ein heiß begonnener historischer Run kann
+2. Gültiger Brandstart bei T >= 75 °C; ein heiß begonnener historischer Zeitraum kann
    beim ersten gültigen Punkt starten. Unter 75 °C: IDLE vor dem ersten Start.
 3. dT/dt ist die Steigung einer linearen Regression der Temperatur über das
    kausale 60-s-Fenster, in °C/min. Dies glättet die kurzfristige Dynamik; es ist
@@ -117,8 +118,8 @@ erfordert reset. Die API normalisiert Eingaben nach UTC.
 9. Ende bei Abfall >= 1.5 °C unter laufendes Tmax, T < 75 °C oder
    kontinuierlich >= 180 s ungültigem Sensor. S=0, Alarm=false, ENDE.
    Nach ENDE wird ein neuer Brand erst nach einem gültigen Wert unter 75 °C
-   und anschließender Rückkehr auf >= 75 °C freigegeben. Ein neues explizites
-   Run/reset startet auch einen neuen Analyzer.
+   und anschließender Rückkehr auf >= 75 °C freigegeben. Ein explizites
+   reset() setzt den Analyzer zurück.
 
 Kein automatischer Übergang zu MITTELLAUF oder VORLAUF_AUSKLANG. Diese
 Enum-Werte sind für spätere Validierung vorbereitet. Plateau bleibt VORLAUF,
@@ -173,13 +174,10 @@ EC-Mittelwerte selbst dürfen weiterhin Teilfenster enthalten.
 Lücken, Sensorfehler und reset löschen auch die zusätzliche Trendhistorie.
 Nach einer Lücke wird die Vorgeschichte neu aufgebaut. Beide Acceleration-Werte
 sind reguläre double-precision-Spalten in Migration 004, nicht JSONB-Diagnose.
-004 wurde direkt erweitert, da sie noch nicht committed oder produktiv
-angewendet war. Eine bereits lokal angelegte alte Tabelle muss vor Verwendung
-der neuen Features um die beiden Spalten ergänzt werden; CREATE TABLE IF NOT
-EXISTS ergänzt bestehende Tabellen nicht. Historische Reihen durch Rebuild
-neu füllen. Die diagnostische Semantik von trend_3m/5m hat sich gegenüber dem
-ersten Sprint geändert; Detector-Parameter, CUSUM und Prozessentscheidungen
-bleiben unverändert und behalten `cusum-v1`.
+Migration 004 wurde direkt auf das zeitbasierte Modell angepasst, weil sie noch
+nicht produktiv angewendet wurde. CREATE TABLE IF NOT EXISTS aktualisiert keine
+bereits lokal angelegte alte Tabelle. CUSUM, Trends, trend_accel, rise_from_min,
+Parameter und Prozessentscheidungen dieser Änderung bleiben unverändert.
 
 Bei fehlenden Buckets erzeugt der Service explizite leere 20-s-Punkte.
 Status DATENLUECKE; Baseline, S und Alarm bleiben erhalten. Zeitfenster und
@@ -197,37 +195,40 @@ POST /api/analysis/rebuild
 Content-Type: application/json
 
 {
-  "from": "2026-01-01T00:00:00Z",
-  "to": "2026-01-01T12:00:00Z",
-  "run_id": "11111111-1111-1111-1111-111111111111",
+  "from": "2026-10-09T00:00:00+02:00",
+  "to": "2026-10-10T00:00:00+02:00",
   "algo_version": "cusum-v1"
 }
 ```
 
-Zeiten sind Beispiele, keine historischen Referenzdaten. `run_id` optional:
-ohne Run-ID werden zugeordnete Runs mit Rohdaten im angeforderten Fenster
-getrennt analysiert. Der Rebuild liest pro Run die vollständige Vorgeschichte
-bis zum Ende des gewählten Fensters, erzeugt einen frischen Analyzer und ruft
-update exakt einmal pro chronologischem Bucket auf. Persistiert werden nur
-Bucket-Startzeiten >= from; `to` ist exklusiv und wird auf den letzten
-abgeschlossenen UTC-Bucket abgerundet. Ein Bucket endet 20 s nach seinem
-Zeitstempel. Offene Buckets und Zukunftsdaten werden ausgeschlossen.
+`from` und `to` bestimmen ausschließlich das Speicherfenster. `run_id` wird
+nicht unterstützt. Der Rebuild liest alle relevanten Rohdaten vor dem letzten
+abgeschlossenen Bucket, unabhängig von Run-Zuordnungen, aggregiert sie mit der
+bestehenden 20-s-Bucket-Logik und verarbeitet sie mit einem frischen Analyzer
+chronologisch durch dieselbe update()-Logik wie live.
 
-Antwort: `points_written`, `runs`, `detector_name`, `algo_version`,
-`completed_until`. Ungültiges JSON, Zeitbereich, UUID oder unbekannte Version/Run:
+Die vollständige verfügbare Vorgeschichte wird automatisch eingelesen: Ein
+festes 10-/30-min-Warmup wäre für die fortgeschriebene und gegebenenfalls
+verriegelte Baseline sowie CUSUM nicht exakt. Die Featurefenster sind begrenzt,
+der Detector-State dagegen nicht. Nur Bucket-Startzeiten >= from werden
+persistiert; `to` ist exklusiv. Offene Buckets und Zukunftsdaten werden
+nicht berechnet. Der gesamte angeforderte Speicherbereich wird atomar ersetzt.
+Keine Änderung an sensor_measurements; keine künstlichen UUIDs.
+
+Antwort: `points_written`, `detector_name`, `algo_version`, `completed_until`.
+Ungültiges JSON, Zeitbereich, Zeit ohne Zeitzone, run_id oder unbekannte Version:
 HTTP 400. Leerer gültiger Bereich kann null Punkte liefern.
 
-Der Endpunkt folgt den vorhandenen Flask-API-Konventionen, ohne neue
-Authentifizierung einzuführen. Er ist ein synchroner Admin-/Debug-Aufruf.
-Nur über den vorhandenen geschützten Betreiberzugang aufrufen; gleichzeitige
-Rebuilds und Live-Schreibzugriffe für denselben Run/Version serialisieren.
-Für lange Runs ggf. vorhandenes Gunicorn-/Proxy-Zeitlimit berücksichtigen.
+Der Aufruf bleibt synchron. Für große Datenbestände werden Vorgeschichte und
+Ergebnisse derzeit im Speicher gehalten; vorhandene Gunicorn-/Proxy-Zeitlimits
+berücksichtigen. Gleichzeitige Rebuilds und Live-Schreibzugriffe für denselben
+Zeitraum/Detector/Version durch den Betreiber serialisieren.
 Direkter API-Zugang: Port 5000; hinter dem vorhandenen Nginx-Prefix:
 `/backend/api/analysis/rebuild`.
 
 ## G. Grafana
 
-Filter: Analyse Brand, Detector, Algorithmusversion. Der bestehende Dashboard-UID
+Filter: Grafana-Zeitfenster, Detector, Algorithmusversion. Der bestehende Dashboard-UID
 bleibt erhalten. Alle neuen Panelabfragen lesen ausschließlich `process_analysis`.
 
 - EC Prozesssignal: raw_mv, 1-/5-min-Mittel und CUSUM-Baseline aus details.
@@ -243,8 +244,8 @@ bleibt erhalten. Alle neuen Panelabfragen lesen ausschließlich `process_analysi
 
 Die physikalischen Werte sind detectorunabhängig. Zusätzliche CUSUM-Diagnosen
 bleiben optionale JSON-Felder; bei anderen Detectoren ohne diese Schlüssel
-zeigen die betreffenden Reihen NULL. Bei überlappenden historischen Runs
-unbedingt einen einzelnen Brand auswählen. Ohne Rebuild/Live-Writer bleiben
+zeigen die betreffenden Reihen NULL. Historische Brände werden ausschließlich
+über Grafana-Zeitfenster verglichen. Ohne Rebuild/Live-Writer bleiben
 Analysepanels leer. Grafana-Refresh berechnet keine neuen Analysepunkte.
 
 ## H. Tests
@@ -254,7 +255,7 @@ Plateau-Persistenz, 20-s-Sequenz, Temperatursteigung, Zeitfenster, Mittelwerte,
 Minimum/Anstieg, drei Trends, EW-Mittelwert und Varianz, Warmup, Sigma-Untergrenze,
 Freeze-Verriegelung, z, standardmäßig deaktiviertes Clipping, CUSUM-Formel,
 Alarm-Grenze/Hysterese, Temperatur-Gates, Ende, Fehlerdauer, Datenlücken,
-Qualität, nicht endliche Werte, Reset/Neustart, Run-Trennung, kausale Präfixe,
+Qualität, nicht endliche Werte, Reset/Neustart, Run-Unabhängigkeit, kausale Präfixe,
 fehlende und partielle Buckets, idempotenten Rebuild, historische/inkrementelle
 Übereinstimmung und unveränderte Rohdaten. Dashboardtests prüfen rein lesende
 Analyseabfragen, Filter, letzte Werte, Einheiten und CUSUM-Diagnosen.
@@ -268,64 +269,28 @@ beschleunigten Anstieg, Erholung eines negativen Trends, exakte Warmup-Grenzen,
 Lücken, Kausalität, reguläre Persistenzspalten, historische/Live-Übereinstimmung
 und die Unabhängigkeit der Detector-/Prozessentscheidungen von Diagnosefeatures.
 
-Die vollständige Testsuite enthält außerdem die unveränderten Hardware-/API-/
-Kalibrierungs-/Updaterprüfungen. Abschließendes Ergebnis nach Trend-Dynamik-Erweiterung: 120 Tests bestanden. Im vorherigen Sprint wurde in einem
-isolierten PostgreSQL-15-Container die damalige Migration 004 zweimal ausgeführt; geprüft
-wurden 40-Punkt-Rebuild, idempotente Upserts, unveränderte Rohdaten, JSONB,
-Indizes, begrenzter Live-Bucket-Zugriff mit identischem Ergebnis und alle sechs
-Grafana-Abfragen. Das verfügbare Image enthält kein TimescaleDB: für diesen
-Test wurde ausschließlich in der isolierten Testdatenbank eine UTC-20-s-
-`time_bucket`-Testfunktion verwendet. Die echte Timescale-Erweiterung und das
-gerenderte Grafana-UI wurden nicht ausgeführt. Die neue Trend-Dynamik-Persistenz
-wurde zusätzlich durch die SQLite-Rebuild-/Live-Tests geprüft; der PostgreSQL-
-Containertest wurde für diese Erweiterung nicht erneut ausgeführt.
+Zusätzliche zeitbasierte Tests prüfen historische NULL-Run-Messungen vom
+09.10.2026, automatisches Warmup, keine Persistenz außerhalb des Speicherfensters,
+gezieltes Ersetzen einschließlich leerer Bereiche, Erhalt anderer Versionen,
+Transaktions-Rollback und mehrere getrennte Brände mit Live-/Replay-Gleichheit.
+Auch ein Teil-Rebuild nach über 30 Minuten übernimmt die ursprüngliche Baseline.
+Die vollständige Suite umfasst Backend- und Watchdogtests; das aktuelle Ergebnis
+ist im Abschlussbericht dokumentiert. Ein gerendertes Grafana-UI und die echte
+TimescaleDB-Laufzeit sind zusätzliche Integrationsprüfungen.
 
-## I. Zwetschke und Birne historisch neu berechnen
+## I. Historische Brände vom 09.10.2026 neu berechnen
 
-1. Backend bereitstellen und Migration 004 anwenden.
-2. Die tatsächlichen Run-IDs und Zeitgrenzen bestimmen, beispielsweise:
+Nach Bereitstellung des Backends und Anwendung von Migration 004 einmal den
+gesamten 09.10.2026 in Europe/Berlin (UTC+02:00) berechnen:
 
-   ```sql
-   SELECT id, batch_name, started_at, ended_at
-   FROM distillation_runs
-   WHERE batch_name ILIKE '%zwetsch%' OR batch_name ILIKE '%birne%'
-   ORDER BY started_at;
-   ```
+```sh
+curl --fail-with-body -X POST http://localhost:5000/api/analysis/rebuild \
+  -H 'Content-Type: application/json' \
+  -d '{"from":"2026-10-09T00:00:00+02:00","to":"2026-10-10T00:00:00+02:00","algo_version":"cusum-v1"}'
+```
 
-3. Pro Brand den Endpunkt aufrufen; Zeitangaben aus der DB mit Offset verwenden:
-
-   ```sh
-   curl -X POST http://localhost:5000/api/analysis/rebuild \
-     -H 'Content-Type: application/json' \
-     -d '{"from":"<START_MIT_OFFSET>","to":"<ENDE_MIT_OFFSET>","run_id":"<RUN_UUID>","algo_version":"cusum-v1"}'
-   ```
-
-4. Im Dashboard den jeweiligen Brand und dieselbe Version wählen, Fenster
-   auf diesen Brand setzen. `to` mindestens bis zum Ende des letzten gewünschten
-   vollständigen Buckets wählen.
-5. Erste Alarmflanke suchen, nicht jeden späteren Alarmwert:
-
-   ```sql
-   WITH ordered AS (
-     SELECT time, vapor_temp, detector_alarm,
-            lag(detector_alarm, 1, false) OVER (ORDER BY time) AS previous_alarm
-     FROM process_analysis
-     WHERE run_id = '<RUN_UUID>' AND detector_name='cusum'
-       AND algo_version='cusum-v1'
-   )
-   SELECT time, vapor_temp FROM ordered
-   WHERE detector_alarm AND NOT previous_alarm ORDER BY time;
-   ```
-
-Diese Diagnoseabfrage findet gespeicherte Alarmflanken; sie berechnet keinen
-Detector. Vergleichswerte laut Auftrag: Zwetschke etwa 14:55:20/85.5 °C,
-Birne etwa 17:48:00/85.8 °C. Datum und Zeitzone dieser Referenzen sind nicht
-angegeben. Hier keine verifizierte Übereinstimmung behaupten. Bei Abweichung
-zuerst Bucketausrichtung, Plateau-Bestätigungszeit, Regression statt alter
-Ableitung, EW-Varianzformel, z nach Baseline-Update, Warmup, Freeze/Gates,
-Rohdatenqualität und Referenzzeitzone prüfen. Keine Schwellen an die Referenz
-anpassen. Die zuvor getestete vollständige Detectorimplementierung liegt dem
-Auftrag nicht bei; Formel-/Reihenfolgegleichheit muss damit separat verglichen werden.
+Anschließend auf den jeweiligen Brand in Grafana zoomen und dieselbe Version
+wählen. Die Rohdaten brauchen keine Zuordnung zu distillation_runs.
 
 ## J. Späterer Live-Aufruf
 
@@ -336,13 +301,12 @@ from disti.process_analysis.service import AnalysisService
 config = AnalysisConfig()
 service = AnalysisService(repository, config)
 analyzer = ProcessAnalyzer(config)
-analyzer.reset(run_id)
 
 # Genau einmal pro abgeschlossenem Bucket, aufsteigend, einschließlich Lücken:
 result = service.save_completed_point(analyzer, AnalysisInput(
     time=bucket_start_utc,
     vapor_temp=avg_vapor_temp, raw_mv=avg_ec_raw_mv,
-    pt_raw_mv=avg_pt_raw_mv, run_id=run_id,
+    pt_raw_mv=avg_pt_raw_mv,
     sensor_invalid=has_invalid_quality,
 ))
 ```
@@ -358,7 +322,7 @@ nur den einen abgeschlossenen Bucket; ein leerer Bucket wird als DATENLUECKE
 persistiert. Die laufende Instanz wird behalten; niemals für jeden Live-Punkt
 neu erstellen und niemals den ganzen Brand regelmäßig neu berechnen.
 
-Nach Prozessneustart bisherigen Run einmal durch dieselbe update-Logik replayen,
+Nach Prozessneustart verfügbare Sensor-Vorgeschichte einmal durch dieselbe update-Logik replayen,
 dann fortsetzen. Noch kein persistenter Analyzer-Checkpoint. Wenn eine
 Persistenzoperation fehlschlägt, vor einem Retry den Analyzer durch Replay
 wiederherstellen; update darf für denselben Zeitstempel nicht doppelt laufen.
