@@ -156,3 +156,74 @@ class Repository:
         self._execute("INSERT INTO actuator_events(id,time,run_id,actuator_id,event_type,status,details) VALUES(%s,%s,%s,%s,%s,'completed',%s)",
                       (eid, (timestamp or now()).isoformat(), run_id, actuator_id, event_type, json.dumps(details)), fetch=None)
         return self._execute("SELECT * FROM actuator_events WHERE id=%s", (eid,), "one")
+
+    def analysis_runs(self, start, end, run_id=None):
+        if run_id is not None:
+            return self._execute("SELECT id, ended_at FROM distillation_runs WHERE id=%s", (run_id,))
+        return self._execute(
+            "SELECT DISTINCT r.id, r.ended_at FROM distillation_runs r "
+            "JOIN sensor_measurements m ON m.run_id=r.id "
+            "WHERE m.time >= %s AND m.time < %s ORDER BY r.id",
+            (start.isoformat(), end.isoformat()))
+
+    def analysis_buckets(self, run_id, end, seconds, valid_qualities=('good', 'simulated'), start=None):
+        # Aggregation only. Features and all process formulas live in process_analysis.
+        lower_bound = ' AND time >= %s' if start is not None else ''
+        lower_params = (start.isoformat(),) if start is not None else ()
+        if not self.sqlite:
+            return self._execute("""
+                SELECT time_bucket(%s::interval, time) AS time,
+                  avg(value) FILTER (WHERE sensor_id='vapor-temp') AS vapor_temp,
+                  avg(raw_mv) FILTER (WHERE sensor_id='ec-1') AS raw_mv,
+                  avg(raw_mv) FILTER (WHERE sensor_id='ec-temp') AS pt_raw_mv,
+                  bool_or(quality IS NULL OR NOT (quality = ANY(%s))) AS sensor_invalid
+                FROM sensor_measurements
+                WHERE run_id=%s AND time < %s
+                  AND sensor_id IN ('vapor-temp','ec-1','ec-temp')
+                """ + lower_bound + ' GROUP BY 1 ORDER BY 1',
+                (f'{seconds} seconds', list(valid_qualities), run_id, end.isoformat()) + lower_params)
+        from collections import defaultdict
+        from statistics import fmean
+        from disti.process_analysis.service import timestamp, floor_bucket
+        rows = self._execute("SELECT time,sensor_id,value,raw_mv,quality FROM sensor_measurements "
+                             "WHERE run_id=%s AND time < %s AND sensor_id IN ('vapor-temp','ec-1','ec-temp')" + lower_bound + ' ORDER BY time',
+                             (run_id, end.isoformat()) + lower_params)
+        groups = defaultdict(list)
+        for row in rows:
+            groups[floor_bucket(timestamp(row['time']), seconds)].append(row)
+        result = []
+        for time, readings in sorted(groups.items()):
+            item = {'time': time, 'sensor_invalid': any(r['quality'] not in valid_qualities for r in readings)}
+            for sensor, field, source in (('vapor-temp','vapor_temp','value'), ('ec-1','raw_mv','raw_mv'), ('ec-temp','pt_raw_mv','raw_mv')):
+                values = [r[source] for r in readings if r['sensor_id'] == sensor and r[source] is not None]
+                item[field] = fmean(values) if values else None
+            result.append(item)
+        return result
+
+    def save_analysis(self, results):
+        """Atomic batch upsert, including corrections on repeated historical rebuilds."""
+        from dataclasses import asdict
+        if not results:
+            return
+        rows = []
+        for result in results:
+            row = asdict(result)
+            row.update(row.pop('features'))
+            row['time'] = result.time.isoformat()
+            row['process_state'] = result.process_state.value
+            row['details'] = json.dumps(row['details'], allow_nan=False)
+            rows.append(row)
+        columns = list(rows[0])
+        placeholders = ','.join(['?' if self.sqlite else '%s']*len(columns))
+        updates = ','.join(f'{col}=excluded.{col}' for col in columns if col not in ('run_id','time','detector_name','algo_version'))
+        sql = f"INSERT INTO process_analysis ({','.join(columns)}) VALUES ({placeholders}) ON CONFLICT(run_id,time,detector_name,algo_version) DO UPDATE SET {updates}"
+        conn = self.connection_factory()
+        try:
+            with conn:
+                cur = conn.cursor()
+                try:
+                    cur.executemany(sql, [tuple(row[col] for col in columns) for row in rows])
+                finally:
+                    cur.close()
+        finally:
+            conn.close()

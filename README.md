@@ -333,6 +333,14 @@ to the database's non-reserved `calibration_offset` column. The
 `distillation_timeline` combines readings, fractions, cuts, and actuator events
 for direct Grafana queries.
 
+The experimental process analyzer is isolated in `disti.process_analysis`.
+`POST /api/analysis/rebuild` replays completed 20-second raw-data buckets through
+the same engine prepared for incremental live processing. Migration 004 stores
+versioned generic detector outputs in `process_analysis`; the experimental
+Grafana panels read those outputs. No automatic cuts or notifications are enabled.
+See [process analysis documentation](docs/grafana-experimental-analysis.md) for
+parameters, rebuild examples, live integration, and validation limits.
+
 ## Reference implementation note
 
 The VENTI technical handoff is the rollout and provisioning reference. DISTI
