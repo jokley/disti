@@ -1,122 +1,380 @@
-# Grafana: experimentelle Prozessanalyse
+# DISTI: experimentelle Prozessanalyse
 
-Der Bereich **Analyse / Experimental** ist eine rein lesende Arbeitshypothese für
-die ersten Rohbrände. Er klassifiziert keine Prozessphasen, definiert keine
-Schwellen und hat keinen Einfluss auf die Steuerung. Alle Werte werden bei jeder
-Abfrage aus `sensor_measurements` berechnet und nicht persistiert.
+## A. Dateien und Umfang
 
-## Feste Analyse-Semantik
+Neu: `backend/disti/process_analysis/{__init__,models,config,features,states,analyzer,service}.py`,
+`backend/migrations/004_process_analysis.sql`, `backend/tests/test_process_analysis.py`.
+Geändert: `README.md`, `backend/disti/repository.py`, `backend/disti/api/app.py`,
+`backend/tests/test_grafana_dashboard.py`, `grafana/dashboards/Distillation.json`, diese Dokumentation.
 
-Die Glättung ist der arithmetische Mittelwert aller Messungen eines Sensors in
-einem an der Uhr ausgerichteten TimescaleDB-Bucket von exakt einer Minute:
+Die Rohdatentabelle, Sensorerfassung, Hardware-Treiber, Notifications und
+Steuerung bleiben unverändert. Die alte SQL-basierte experimentelle Dashboard-Zeile
+wird ersetzt. Operative Panels und Rohdatenbereich bleiben bestehen.
 
-```sql
-time_bucket(INTERVAL '1 minute', time), avg(value)
+## B. Modulstruktur und Verantwortlichkeiten
+
+```text
+backend/disti/process_analysis/
+├── __init__.py   öffentliche Imports
+├── config.py     unveränderliche experimentelle AnalysisConfig
+├── models.py     AnalysisInput, Features, DetectorDetails, AnalysisResult
+├── features.py   kausale Zeitfenster und lineare Trends
+├── states.py     stabile ProcessState-Enum
+├── analyzer.py   ProcessAnalyzer.reset()/update(), ohne externe Infrastruktur
+└── service.py    Rebuild-Orchestrierung und einzelner Live-Persistenzaufruf
 ```
 
-`dT/dt` und `dEC/dt` vergleichen den Mittelwert mit `lag()` über den
-vorhergehenden Bucket. Eine Ableitung wird nur ausgegeben, wenn die beiden
-Bucket-Zeitstempel genau 60 Sekunden auseinanderliegen. Sie wird als
-`(aktueller Mittelwert - vorheriger Mittelwert) * 60 / verstrichene Sekunden`
-berechnet und hat damit die Einheit pro Minute. `NULLIF(elapsed_seconds, 0)`
-schließt eine Division durch null zusätzlich aus. Bei einer vollständig
-fehlenden Minute bleibt die Ableitung `NULL`, statt eine Änderung über eine
-längere Lücke fälschlich als 60-Sekunden-Änderung darzustellen.
+Repository: nur Rohdatenaggregation und Persistenz. Flask: nur Requestvalidierung
+und Serviceaufruf. Grafana: nur gespeicherte Analysewerte und Anzeigeformatierung.
 
-`$__interval` kommt in der Analyse nicht vor. Eine Änderung des Dashboard-
-Zeitraums ändert deshalb weder Bucketbreite noch Ableitungsdefinition. Der
-erste und eventuell letzte Bucket eines ausgewählten Zeitraums kann nur einen
-Teil einer Minute enthalten; für den ersten sichtbaren Bucket gibt es mangels
-Vorgänger im ausgewählten Bereich keine Ableitung.
+Ein anderer Analyzer benötigt denselben Konstruktor-, reset- und update-Vertrag,
+einen `detector_name` und generische Resultfelder. `AnalysisService(...,
+analyzer_type=OtherAnalyzer)` ist der kleine Austauschpunkt; keine Registry oder
+Plugin-Factory. Für weitere Detectoren dürfen deren interne typisierte Details
+angepasst werden; die generischen DB-Spalten bleiben erhalten. Die explizite
+API-Versionsprüfung muss bei Freigabe einer neuen Implementierung erweitert
+werden. Parallelbetrieb bedeutet getrennte Analyzer-Instanzen pro Run/Detector/Version.
 
-## Abfragen
+## C. Schema, Migration und Inbetriebnahme
 
-### Kesseldampf – Dynamik
+`004_process_analysis.sql` legt eine additive PostgreSQL-Tabelle an:
 
-```sql
-WITH minute_values AS (
-  SELECT time_bucket(INTERVAL '1 minute', time) AS time,
-         avg(value)::double precision AS smoothed_value
-  FROM sensor_measurements
-  WHERE sensor_id = 'vapor-temp'
-    AND $__timeFilter(time)
-  GROUP BY 1
-), lagged AS (
-  SELECT time, smoothed_value,
-         lag(smoothed_value) OVER (ORDER BY time) AS previous_value,
-         EXTRACT(EPOCH FROM time - lag(time) OVER (ORDER BY time))::double precision AS elapsed_seconds
-  FROM minute_values
-)
-SELECT time,
-       smoothed_value AS "Kesseldampf (60-s-Mittel)",
-       CASE WHEN elapsed_seconds = 60
-            THEN (smoothed_value - previous_value) * 60.0 / NULLIF(elapsed_seconds, 0)
-       END AS "dT/dt (°C/min)"
-FROM lagged
-ORDER BY time;
+- Schlüssel: `(run_id, time, detector_name, algo_version)`.
+- Physik: `vapor_temp`, `raw_mv`, `pt_raw_mv`, `dtdt`, geglättete EC-Werte.
+- Features: Minimum, Abstand vom Minimum, drei Trends und Trendänderungen über eine Minute.
+- Detector: Name, Version, generischer Score, boolescher Alarm.
+- Interpretation: `process_state`, `ended`.
+- `details JSONB`: typisierte interne CUSUM-Diagnose als Persistenzformat,
+  einschließlich Mittelwert, Varianz, Sigma, Warmup-Zähler, Freeze, z, S und
+  Sekunden seit Plateau.
+
+`run_id` ist bewusst nicht NULL und verweist auf einen bestehenden Brand.
+Messungen ohne Run-Zuordnung werden nicht analysiert und nicht nachträglich
+verändert. Die PK erlaubt mehrere Detectoren und Versionen pro Analysezeitpunkt.
+Ein zusätzlicher Index auf `(detector_name, algo_version, time DESC, run_id)`
+unterstützt Grafana. Der vorhandene Rohdatenindex
+`(sensor_id, time DESC)` sowie `(run_id, time DESC)` wird genutzt; kein weiterer
+Rohdatenindex und keine Veränderung am Hypertable.
+
+Ein Batch-Upsert läuft in einer Transaktion. Derselbe Rebuild ersetzt vorhandene
+Werte derselben Identität; andere Versionen bleiben erhalten. Die Rohdaten
+werden ausschließlich gelesen. Für sehr lange Zeiträume Rebuilds pro Brand
+aufrufen: Buckets und Ergebnisse werden derzeit im Speicher gehalten.
+
+Nach Bereitstellung des aktualisierten Backends im bestehenden Stack:
+
+```sh
+docker compose exec api python -m entrypoints.migrate
 ```
 
-### EC – Dynamik
+Die vorhandene Migration-Entrypoint-Konvention wird verwendet. Anschließend
+Grafana das aktualisierte provisionierte Dashboard laden lassen. In dieser
+Arbeitsumgebung wurde kein bestehender DISTI-Stack migriert oder neu gestartet.
+Ein automatischer Live-Worker wird mit dieser Änderung noch nicht gestartet;
+Dashboard-Daten entstehen zunächst durch Rebuild-Aufrufe.
 
-Die EC-Abfrage ist identisch aufgebaut, verwendet aber `sensor_id = 'ec-1'`
-und benennt die Reihen `EC (60-s-Mittel)` und `dEC/dt (µS/cm/min)`.
+## D. Analyzer-State und Berechnungsreihenfolge
 
-### Prozessanalyse
+Eine Instanz gehört genau einem Run. `reset(run_id)` löscht Zeitfenster,
+Prozess-/Endzustand, Plateau, Tmax, Fehlerdauer, Baseline, S und Alarm.
+Zeitstempel müssen Zeitzonen enthalten und streng steigen; ein Run-Wechsel
+erfordert reset. Die API normalisiert Eingaben nach UTC.
 
-```sql
-SELECT time_bucket(INTERVAL '1 minute', time) AS time,
-       avg(value) FILTER (WHERE sensor_id = 'vapor-temp')::double precision AS "Kesseldampf (60-s-Mittel)",
-       avg(value) FILTER (WHERE sensor_id = 'ec-1')::double precision AS "EC (60-s-Mittel)"
-FROM sensor_measurements
-WHERE sensor_id IN ('vapor-temp', 'ec-1')
-  AND $__timeFilter(time)
-GROUP BY 1
-ORDER BY 1;
+1. Datenlücke oder ungültiger Sensor: keine neuen Features/Detector-Entscheidungen.
+2. Gültiger Brandstart bei T >= 75 °C; ein heiß begonnener historischer Run kann
+   beim ersten gültigen Punkt starten. Unter 75 °C: IDLE vor dem ersten Start.
+3. dT/dt ist die Steigung einer linearen Regression der Temperatur über das
+   kausale 60-s-Fenster, in °C/min. Dies glättet die kurzfristige Dynamik; es ist
+   nicht die Differenz ungeglätteter Einzelwerte.
+4. Plateau wird beim dritten aufeinanderfolgenden passenden Bucket bestätigt;
+   dieser Bestätigungszeitpunkt ist `plateau_time`, ohne rückwirkende Änderung.
+5. Baseline startet frühestens 300 s nach Plateau. Erster Wert initialisiert
+   mu mit raw_mv und Varianz mit 4. Danach gilt:
+
+   ```text
+   alpha = 1 - 0.5 ** (bucket_seconds / baseline_half_life_seconds)
+   delta = raw_mv - mu_previous
+   mu = mu_previous + alpha * delta
+   var = (1-alpha) * (var_previous + alpha * delta**2)
+   sigma = max(sqrt(var), sigma_min_mv)
+   ```
+
+6. Freeze wird ab 84.5 °C verriegelt und bleibt bis zum neuen Brand/reset
+   aktiv, auch wenn die Temperatur danach wieder unter das Gate fällt.
+7. z nutzt die Baseline nach dem jeweiligen Baseline-Update. Erst nach 30
+   gültigen Baseline-Samples wird z bereitgestellt. Bei Freeze bleibt die
+   Baseline unverändert. CUSUM läuft erst ab 84 °C und fertigem Warmup:
+
+   ```text
+   z = (raw_mv - mu) / sigma          # kein Clipping im Standard
+   S = max(0, 0.995 * S_previous + z - 0.75)
+   Alarm EIN bei S > 6; AUS bei S < 1.8; dazwischen Zustand beibehalten
+   detector_score = min(S / 6, 2)
+   ```
+
+8. Alarm bei T < 86 °C: NACHLAUF_ENTWICKELT; ab 86 °C:
+   NACHLAUF_WAHRSCHEINLICH. Das sind experimentelle Interpretationen.
+9. Ende bei Abfall >= 1.5 °C unter laufendes Tmax, T < 75 °C oder
+   kontinuierlich >= 180 s ungültigem Sensor. S=0, Alarm=false, ENDE.
+   Nach ENDE wird ein neuer Brand erst nach einem gültigen Wert unter 75 °C
+   und anschließender Rückkehr auf >= 75 °C freigegeben. Ein neues explizites
+   Run/reset startet auch einen neuen Analyzer.
+
+Kein automatischer Übergang zu MITTELLAUF oder VORLAUF_AUSKLANG. Diese
+Enum-Werte sind für spätere Validierung vorbereitet. Plateau bleibt VORLAUF,
+bis ein Detector-/Endzustand oder eine Datenqualitätsüberlagerung hinzukommt.
+Zeit seit Plateau und EC-Trends dienen der Diagnose, nicht der Schnittsteuerung.
+
+## E. Parameter und Fensterspezifikation
+
+Alle Schwellen in `config.py`. Standard: 20 s Buckets; Start 75 °C;
+Plateau dT/dt < 1 °C/min, drei gültige Buckets; Delay 300 s;
+Halbwertszeit 600 s; Warmup 30 Samples; Varianz 4 mV²; Sigma >= 1.5 mV;
+Freeze 84.5 °C; Detection-Gate 84 °C; Bestätigungs-Gate 86 °C;
+k=.75, h=6, Leak=.995, Alarm-Aus=1.8; Scoremaximum=2;
+z_clip=None; Endeabfall 1.5 °C; Fehlerdauer 180 s; Version `cusum-v1`.
+
+Strenges Plateau ist vorbereitet, aber aus: T >= 81.8 °C und
+-0.2 <= dT/dt <= 0.3 °C/min. Parameteränderungen für historische Vergleiche
+sollten eine neue `algo_version` bekommen; Rebuild mit unverändertem
+Versionsnamen ersetzt ansonsten die vorherigen Resultate.
+
+EC raw_mv > 200 mV ist ungültig. Der reale ADS1115-Treiber berechnet
+`raw_count * full_scale_volts * 1000 / 32768`: raw_mv ist mV,
+auch beim PT1000-Kanal. Die experimentelle Absteckprüfung verwendet deshalb
+3300 mV mit zentral konfigurierter ±100-mV-Toleranz. Fehlende Sensorwerte
+sind eine Datenlücke; nicht endliche Werte oder explizite ungültige Qualität
+sind Sensorfehler. `good` und die bestehende Testqualität `simulated` werden
+akzeptiert. Qualitätsfehler eines Kernkanals machen den Bucket ungültig.
+
+Featurefenster sind `(time-window, time]`, also bei lückenlosen 20-s-Buckets
+3/9/15 Werte für 1/3/5 Minuten. EC-Mittelwerte sind arithmetisch; Minimum und
+rise_from_min verwenden das 5-min-Fenster. `trend_1m` bleibt eine Regressionssteigung in mV/min (mindestens zwei Werte).
+`trend_3m` und `trend_5m` sind jetzt diagnostische Differenzen des geglätteten
+5-min-Mittelwerts:
+
+```text
+trend_3m(t) = (raw_mv_5m(t) - raw_mv_5m(t - 3 min)) / 3 min
+trend_5m(t) = (raw_mv_5m(t) - raw_mv_5m(t - 5 min)) / 5 min
+trend_accel_3m(t) = (trend_3m(t) - trend_3m(t - 1 min)) / 1 min
+trend_accel_5m(t) = (trend_5m(t) - trend_5m(t - 1 min)) / 1 min
 ```
 
-### Temperaturdifferenz
+Trendeinheit: mV/min; Trendänderung: mV/min². Es wird keine rohe zweite
+Ableitung berechnet. Der Vergleichsabstand ist zentral als
+`trend_accel_lag_seconds=60` konfiguriert. Exakte Zeitstempel statt Zeilenabstände;
+keine Interpolation und keine Zukunftsdaten. Für diese Trends muss die
+5-min-Glättung an beiden Vergleichszeitpunkten vollständig aufgewärmt sein.
+Der erste vollständige Glättungswert kommt konservativ nach 300 s gültiger
+kontinuierlicher Vorgeschichte. Damit ist `trend_accel_3m` frühestens nach
+540 s und `trend_accel_5m` nach 660 s verfügbar. Vorher: NULL. Die angezeigten
+EC-Mittelwerte selbst dürfen weiterhin Teilfenster enthalten.
 
-```sql
-WITH aligned AS (
-  SELECT time_bucket(INTERVAL '1 minute', time) AS time,
-         avg(value) FILTER (WHERE sensor_id = 'vapor-temp')::double precision AS vapor_temperature,
-         avg(value) FILTER (WHERE sensor_id = 'ec-temp')::double precision AS ec_temperature
-  FROM sensor_measurements
-  WHERE sensor_id IN ('vapor-temp', 'ec-temp')
-    AND $__timeFilter(time)
-  GROUP BY 1
-)
-SELECT time,
-       vapor_temperature - ec_temperature AS "Kesseldampf minus EC-Temperatur"
-FROM aligned
-WHERE vapor_temperature IS NOT NULL
-  AND ec_temperature IS NOT NULL
-ORDER BY time;
+Lücken, Sensorfehler und reset löschen auch die zusätzliche Trendhistorie.
+Nach einer Lücke wird die Vorgeschichte neu aufgebaut. Beide Acceleration-Werte
+sind reguläre double-precision-Spalten in Migration 004, nicht JSONB-Diagnose.
+004 wurde direkt erweitert, da sie noch nicht committed oder produktiv
+angewendet war. Eine bereits lokal angelegte alte Tabelle muss vor Verwendung
+der neuen Features um die beiden Spalten ergänzt werden; CREATE TABLE IF NOT
+EXISTS ergänzt bestehende Tabellen nicht. Historische Reihen durch Rebuild
+neu füllen. Die diagnostische Semantik von trend_3m/5m hat sich gegenüber dem
+ersten Sprint geändert; Detector-Parameter, CUSUM und Prozessentscheidungen
+bleiben unverändert und behalten `cusum-v1`.
+
+Bei fehlenden Buckets erzeugt der Service explizite leere 20-s-Punkte.
+Status DATENLUECKE; Baseline, S und Alarm bleiben erhalten. Zeitfenster und
+noch unbestätigte Plateau-Persistenz werden geleert, damit kein Trend über
+Lücken entsteht. Eine direkt gelieferte übersprungene Zeit wird ebenfalls als
+DATENLUECKE ausgegeben. Live deshalb jeden Bucket einschließlich leerer Buckets
+liefern. Lücken unterbrechen auch den Nachweis eines kontinuierlichen
+Sensorfehlers; sie beenden den Brand nicht. Unterhalb des Detection-Gates
+bleibt CUSUM ebenfalls eingefroren, bis Gate oder Endkriterium greift.
+
+## F. API
+
+```http
+POST /api/analysis/rebuild
+Content-Type: application/json
+
+{
+  "from": "2026-01-01T00:00:00Z",
+  "to": "2026-01-01T12:00:00Z",
+  "run_id": "11111111-1111-1111-1111-111111111111",
+  "algo_version": "cusum-v1"
+}
 ```
 
-### Kühler – Verlauf
+Zeiten sind Beispiele, keine historischen Referenzdaten. `run_id` optional:
+ohne Run-ID werden zugeordnete Runs mit Rohdaten im angeforderten Fenster
+getrennt analysiert. Der Rebuild liest pro Run die vollständige Vorgeschichte
+bis zum Ende des gewählten Fensters, erzeugt einen frischen Analyzer und ruft
+update exakt einmal pro chronologischem Bucket auf. Persistiert werden nur
+Bucket-Startzeiten >= from; `to` ist exklusiv und wird auf den letzten
+abgeschlossenen UTC-Bucket abgerundet. Ein Bucket endet 20 s nach seinem
+Zeitstempel. Offene Buckets und Zukunftsdaten werden ausgeschlossen.
 
-```sql
-SELECT time_bucket(INTERVAL '1 minute', time) AS time,
-       avg(value)::double precision AS "Kühler (60-s-Mittel)"
-FROM sensor_measurements
-WHERE sensor_id = 'cooler-temp'
-  AND $__timeFilter(time)
-GROUP BY 1
-ORDER BY 1;
+Antwort: `points_written`, `runs`, `detector_name`, `algo_version`,
+`completed_until`. Ungültiges JSON, Zeitbereich, UUID oder unbekannte Version/Run:
+HTTP 400. Leerer gültiger Bereich kann null Punkte liefern.
+
+Der Endpunkt folgt den vorhandenen Flask-API-Konventionen, ohne neue
+Authentifizierung einzuführen. Er ist ein synchroner Admin-/Debug-Aufruf.
+Nur über den vorhandenen geschützten Betreiberzugang aufrufen; gleichzeitige
+Rebuilds und Live-Schreibzugriffe für denselben Run/Version serialisieren.
+Für lange Runs ggf. vorhandenes Gunicorn-/Proxy-Zeitlimit berücksichtigen.
+Direkter API-Zugang: Port 5000; hinter dem vorhandenen Nginx-Prefix:
+`/backend/api/analysis/rebuild`.
+
+## G. Grafana
+
+Filter: Analyse Brand, Detector, Algorithmusversion. Der bestehende Dashboard-UID
+bleibt erhalten. Alle neuen Panelabfragen lesen ausschließlich `process_analysis`.
+
+- EC Prozesssignal: raw_mv, 1-/5-min-Mittel und CUSUM-Baseline aus details.
+- Nachlauf-Detector: Nachlauf-Score 0–100, Alarm, CUSUM S, z.
+  Anzeige `LEAST(detector_score*100,100)` ist keine Wahrscheinlichkeit.
+  Schwellen 3/6 gelten ausschließlich für CUSUM S auf der rechten Achse.
+- Vergleichsmarker: rise_from_min, drei Trends sowie trend_accel_3m/5m;
+  Trends mit mV/min und Trendänderungen mit mV/min² auf rechter Achse.
+- Temperatur: vapor_temp sowie dT/dt auf rechter Achse.
+- Prozessstatus: State timeline mit stabilen Enum-Werten/Farben.
+- Analyse – letzter Wert: Kesseldampf, Score, Alarm und Status des letzten
+  Analysepunkts im gewählten Grafana-Zeitfenster.
+
+Die physikalischen Werte sind detectorunabhängig. Zusätzliche CUSUM-Diagnosen
+bleiben optionale JSON-Felder; bei anderen Detectoren ohne diese Schlüssel
+zeigen die betreffenden Reihen NULL. Bei überlappenden historischen Runs
+unbedingt einen einzelnen Brand auswählen. Ohne Rebuild/Live-Writer bleiben
+Analysepanels leer. Grafana-Refresh berechnet keine neuen Analysepunkte.
+
+## H. Tests
+
+DB-freie Analyzer-/Featuretests und SQLite-Persistenz-/Flasktests prüfen:
+Plateau-Persistenz, 20-s-Sequenz, Temperatursteigung, Zeitfenster, Mittelwerte,
+Minimum/Anstieg, drei Trends, EW-Mittelwert und Varianz, Warmup, Sigma-Untergrenze,
+Freeze-Verriegelung, z, standardmäßig deaktiviertes Clipping, CUSUM-Formel,
+Alarm-Grenze/Hysterese, Temperatur-Gates, Ende, Fehlerdauer, Datenlücken,
+Qualität, nicht endliche Werte, Reset/Neustart, Run-Trennung, kausale Präfixe,
+fehlende und partielle Buckets, idempotenten Rebuild, historische/inkrementelle
+Übereinstimmung und unveränderte Rohdaten. Dashboardtests prüfen rein lesende
+Analyseabfragen, Filter, letzte Werte, Einheiten und CUSUM-Diagnosen.
+
+```sh
+PYTHONPATH=backend python -m pytest backend/tests -q
 ```
 
-## Performance und Grenzen
+Zusätzliche Trend-Dynamiktests prüfen konstantes Signal, linearen Anstieg,
+beschleunigten Anstieg, Erholung eines negativen Trends, exakte Warmup-Grenzen,
+Lücken, Kausalität, reguläre Persistenzspalten, historische/Live-Übereinstimmung
+und die Unabhängigkeit der Detector-/Prozessentscheidungen von Diagnosefeatures.
 
-Jede Abfrage begrenzt den Hypertable-Zugriff mit `$__timeFilter(time)` und
-einem einzelnen `sensor_id` oder einer kleinen festen `sensor_id`-Liste. Das
-passt zu den vorhandenen Indizes auf `(sensor_id, time DESC)` und `time`; die
-Aggregation liefert über zwölf Stunden höchstens ungefähr 720 Zeitpunkte pro
-Reihe an Grafana statt der hochfrequenten Rohdaten.
+Die vollständige Testsuite enthält außerdem die unveränderten Hardware-/API-/
+Kalibrierungs-/Updaterprüfungen. Abschließendes Ergebnis nach Trend-Dynamik-Erweiterung: 120 Tests bestanden. Im vorherigen Sprint wurde in einem
+isolierten PostgreSQL-15-Container die damalige Migration 004 zweimal ausgeführt; geprüft
+wurden 40-Punkt-Rebuild, idempotente Upserts, unveränderte Rohdaten, JSONB,
+Indizes, begrenzter Live-Bucket-Zugriff mit identischem Ergebnis und alle sechs
+Grafana-Abfragen. Das verfügbare Image enthält kein TimescaleDB: für diesen
+Test wurde ausschließlich in der isolierten Testdatenbank eine UTC-20-s-
+`time_bucket`-Testfunktion verwendet. Die echte Timescale-Erweiterung und das
+gerenderte Grafana-UI wurden nicht ausgeführt. Die neue Trend-Dynamik-Persistenz
+wurde zusätzlich durch die SQLite-Rebuild-/Live-Tests geprüft; der PostgreSQL-
+Containertest wurde für diese Erweiterung nicht erneut ausgeführt.
 
-Die Ausrichtung erfolgt nach Minuten-Buckets, nicht durch Interpolation. Bei
-der Temperaturdifferenz werden nur Minuten mit Werten beider Sensoren gezeigt.
-Einzelne Ausreißer innerhalb einer Minute können den Mittelwert weiterhin
-beeinflussen, kurze Vorgänge unter einer Minute werden geglättet, und partielle
-Rand-Buckets können weniger Messungen enthalten. Diese Signale sollten daher
-vor dem ersten realen Rohbrand ausschließlich explorativ gelesen werden.
+## I. Zwetschke und Birne historisch neu berechnen
+
+1. Backend bereitstellen und Migration 004 anwenden.
+2. Die tatsächlichen Run-IDs und Zeitgrenzen bestimmen, beispielsweise:
+
+   ```sql
+   SELECT id, batch_name, started_at, ended_at
+   FROM distillation_runs
+   WHERE batch_name ILIKE '%zwetsch%' OR batch_name ILIKE '%birne%'
+   ORDER BY started_at;
+   ```
+
+3. Pro Brand den Endpunkt aufrufen; Zeitangaben aus der DB mit Offset verwenden:
+
+   ```sh
+   curl -X POST http://localhost:5000/api/analysis/rebuild \
+     -H 'Content-Type: application/json' \
+     -d '{"from":"<START_MIT_OFFSET>","to":"<ENDE_MIT_OFFSET>","run_id":"<RUN_UUID>","algo_version":"cusum-v1"}'
+   ```
+
+4. Im Dashboard den jeweiligen Brand und dieselbe Version wählen, Fenster
+   auf diesen Brand setzen. `to` mindestens bis zum Ende des letzten gewünschten
+   vollständigen Buckets wählen.
+5. Erste Alarmflanke suchen, nicht jeden späteren Alarmwert:
+
+   ```sql
+   WITH ordered AS (
+     SELECT time, vapor_temp, detector_alarm,
+            lag(detector_alarm, 1, false) OVER (ORDER BY time) AS previous_alarm
+     FROM process_analysis
+     WHERE run_id = '<RUN_UUID>' AND detector_name='cusum'
+       AND algo_version='cusum-v1'
+   )
+   SELECT time, vapor_temp FROM ordered
+   WHERE detector_alarm AND NOT previous_alarm ORDER BY time;
+   ```
+
+Diese Diagnoseabfrage findet gespeicherte Alarmflanken; sie berechnet keinen
+Detector. Vergleichswerte laut Auftrag: Zwetschke etwa 14:55:20/85.5 °C,
+Birne etwa 17:48:00/85.8 °C. Datum und Zeitzone dieser Referenzen sind nicht
+angegeben. Hier keine verifizierte Übereinstimmung behaupten. Bei Abweichung
+zuerst Bucketausrichtung, Plateau-Bestätigungszeit, Regression statt alter
+Ableitung, EW-Varianzformel, z nach Baseline-Update, Warmup, Freeze/Gates,
+Rohdatenqualität und Referenzzeitzone prüfen. Keine Schwellen an die Referenz
+anpassen. Die zuvor getestete vollständige Detectorimplementierung liegt dem
+Auftrag nicht bei; Formel-/Reihenfolgegleichheit muss damit separat verglichen werden.
+
+## J. Späterer Live-Aufruf
+
+```python
+from disti.process_analysis import AnalysisConfig, AnalysisInput, ProcessAnalyzer
+from disti.process_analysis.service import AnalysisService
+
+config = AnalysisConfig()
+service = AnalysisService(repository, config)
+analyzer = ProcessAnalyzer(config)
+analyzer.reset(run_id)
+
+# Genau einmal pro abgeschlossenem Bucket, aufsteigend, einschließlich Lücken:
+result = service.save_completed_point(analyzer, AnalysisInput(
+    time=bucket_start_utc,
+    vapor_temp=avg_vapor_temp, raw_mv=avg_ec_raw_mv,
+    pt_raw_mv=avg_pt_raw_mv, run_id=run_id,
+    sensor_invalid=has_invalid_quality,
+))
+```
+
+Alternativ kann der Live-Caller die Aggregation direkt dem Service überlassen:
+
+```python
+result = service.process_completed_bucket(analyzer, bucket_start_utc)
+```
+
+Dieser Aufruf liest über `repository.analysis_buckets(..., start=bucket_start)`
+nur den einen abgeschlossenen Bucket; ein leerer Bucket wird als DATENLUECKE
+persistiert. Die laufende Instanz wird behalten; niemals für jeden Live-Punkt
+neu erstellen und niemals den ganzen Brand regelmäßig neu berechnen.
+
+Nach Prozessneustart bisherigen Run einmal durch dieselbe update-Logik replayen,
+dann fortsetzen. Noch kein persistenter Analyzer-Checkpoint. Wenn eine
+Persistenzoperation fehlschlägt, vor einem Retry den Analyzer durch Replay
+wiederherstellen; update darf für denselben Zeitstempel nicht doppelt laufen.
+
+## K. Offene Annahmen und Risiken
+
+- Plateau ist validierter als Vorlaufende; automatische Schnittentscheidungen,
+  Notifications und Aktuatorzugriffe sind nicht implementiert.
+- 200 mV, PT1000-Toleranz, Freeze- und Temperaturschwellen sind experimentell.
+  Der vorhandene einfache MockSensorReader liefert EC >200 mV und keinen
+  PT1000-Rohkanal; dieser alte Mock ist daher kein fachlich gültiger Analysebrand.
+- Wird Freeze vor Baseline-/Warmupabschluss erreicht, wird kein Nachlaufalarm
+  erzeugt. Das ist konservativ und in details erkennbar.
+- Keine Interpolation, keine Warmup-Samples während Lücken. Lange Lücken führen
+  weder zu erfundenem Verlauf noch automatisch zum Ende.
+- Optionales Vorlauf-Ausklang/Mittellauf-Mapping wartet auf echte Validierung.
+- Dashboard-SQL wurde strukturell und zusätzlich soweit möglich gegen PostgreSQL
+  geprüft; ein gerendertes Grafana-UI und echte TimescaleDB-Laufzeit sind getrennte
+  Integrationsprüfungen.
