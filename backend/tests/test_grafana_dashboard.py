@@ -24,10 +24,10 @@ def test_persisted_analysis_panels():
 def test_detector_diagnostics_and_units():
     panels={p['id']:p for p in dashboard()['panels']}
     assert "details->>'baseline_mu'" in panels[20]['targets'][0]['rawSql']
-    assert 'LEAST(detector_score * 100, 100)' in panels[21]['targets'][0]['rawSql']
+    assert '50 * detector_score' in panels[21]['targets'][0]['rawSql']
     assert 'keine statistische Wahrscheinlichkeit' in panels[21]['description']
     steps=panels[21]['fieldConfig']['overrides'][0]['properties'][1]['value']['steps']
-    assert [s['value'] for s in steps]==[None,3,6]
+    assert [s['value'] for s in steps]==[None,4,8]
     assert panels[23]['fieldConfig']['overrides'][0]['properties'][1]['value']=='right'
 
 
@@ -43,3 +43,19 @@ def test_comparison_panel_reads_persisted_trend_dynamics():
 
 def test_analysis_has_no_run_selector():
     assert 'analysis_run' not in {v['name'] for v in dashboard()['templating']['list']}
+
+
+def test_gradual_score_display_and_process_state_mappings():
+    panels={p['id']:p for p in dashboard()['panels']}
+    for panel_id in (21,25):
+        panel=panels[panel_id]
+        assert '50 * detector_score' in panel['targets'][0]['rawSql']
+        assert 'detector_score * 100' not in panel['targets'][0]['rawSql']
+        score=next(o for o in panel['fieldConfig']['overrides'] if o['matcher']['options']=='Nachlauf-Score')
+        props={p['id']:p['value'] for p in score['properties']}
+        assert props['min']==0 and props['max']==100
+        assert props['thresholds']['steps'][-1]['value']==50
+        assert 'keine statistische Wahrscheinlichkeit' in panel['description']
+    mappings=panels[24]['fieldConfig']['defaults']['mappings'][0]['options']
+    for state in ('VORLAUF','VORLAUF_AUSKLANG','MITTELLAUF','NACHLAUF_ENTWICKELT','NACHLAUF_WAHRSCHEINLICH'):
+        assert mappings[state]['text']==state

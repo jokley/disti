@@ -109,8 +109,8 @@ keinen Einfluss auf den Analyzer.
    ```text
    z = (raw_mv - mu) / sigma          # kein Clipping im Standard
    S = max(0, 0.995 * S_previous + z - 0.75)
-   Alarm EIN bei S > 6; AUS bei S < 1.8; dazwischen Zustand beibehalten
-   detector_score = min(S / 6, 2)
+   Alarm EIN bei S > 8; AUS bei S < 2.4; dazwischen Zustand beibehalten
+   detector_score = min(S / 8, 2)
    ```
 
 8. Alarm bei T < 86 °C: NACHLAUF_ENTWICKELT; ab 86 °C:
@@ -121,10 +121,31 @@ keinen Einfluss auf den Analyzer.
    und anschließender Rückkehr auf >= 75 °C freigegeben. Ein explizites
    reset() setzt den Analyzer zurück.
 
-Kein automatischer Übergang zu MITTELLAUF oder VORLAUF_AUSKLANG. Diese
-Enum-Werte sind für spätere Validierung vorbereitet. Plateau bleibt VORLAUF,
-bis ein Detector-/Endzustand oder eine Datenqualitätsüberlagerung hinzukommt.
-Zeit seit Plateau und EC-Trends dienen der Diagnose, nicht der Schnittsteuerung.
+Nach dem bestehenden Plateau beginnt VORLAUF. Der zweistufige Ausgang verwendet
+unverändert berechnete EC-Features und dieselben aktuellen Plateau-Kriterien:
+
+- VORLAUF → VORLAUF_AUSKLANG: `trend_3m > -0.10` mV/min und
+  `trend_accel_3m > 0.0` mV/min², kontinuierlich mindestens 60 s.
+- VORLAUF_AUSKLANG → MITTELLAUF: anschließend `trend_3m >= -0.05` und
+  `trend_5m >= -0.05` mV/min, bei weiter gültigem Plateau mindestens 120 s.
+- VORLAUF_AUSKLANG fällt bei `trend_3m <= -0.10` wieder auf VORLAUF zurück.
+  Dafür wird dieselbe Grenze verwendet, keine zusätzliche Rückfallschwelle.
+- MITTELLAUF bleibt verriegelt; vorhandene Nachlauf- und Endeentscheidungen
+  haben Vorrang. Neuer Brand oder reset() löscht Vorlauf-State und Persistenz.
+
+Persistenz wird über Zeitstempel ab dem ersten passenden Bucket gemessen.
+Der erste MITTELLAUF-Persistenzpunkt liegt nach Erreichen von VORLAUF_AUSKLANG.
+Lücken, Sensorfehler, fehlende benötigte Features, verlorenes Plateau oder
+nicht erfüllte Kriterien unterbrechen die betreffende Persistenz. Das
+Plateau wird weiterhin ausschließlich durch die bestehende Temperatur- und
+dT/dt-Logik definiert. Ohne erstmals bestätigtes Plateau bleibt AUFHEIZEN.
+
+Alle sechs neuen Vorlauf-Parameter stehen in config.py:
+`heads_exit_trend_3m_threshold=-0.10`, `heads_exit_accel_min=0.0`,
+`heads_exit_persistence_seconds=60`, `heads_middle_trend_3m_min=-0.05`,
+`heads_middle_trend_5m_min=-0.05`, `heads_middle_persistence_seconds=120`.
+Keine obere Trendgrenze und kein zusätzlicher Detector wurden ergänzt.
+`rise_from_min_5m` bleibt diagnostisch; keine automatische Schnittsteuerung.
 
 ## E. Parameter und Fensterspezifikation
 
@@ -132,7 +153,7 @@ Alle Schwellen in `config.py`. Standard: 20 s Buckets; Start 75 °C;
 Plateau dT/dt < 1 °C/min, drei gültige Buckets; Delay 300 s;
 Halbwertszeit 600 s; Warmup 30 Samples; Varianz 4 mV²; Sigma >= 1.5 mV;
 Freeze 84.5 °C; Detection-Gate 84 °C; Bestätigungs-Gate 86 °C;
-k=.75, h=6, Leak=.995, Alarm-Aus=1.8; Scoremaximum=2;
+k=.75, h=8, Leak=.995, Alarm-Aus=0.3*h=2.4; Scoremaximum=2;
 z_clip=None; Endeabfall 1.5 °C; Fehlerdauer 180 s; Version `cusum-v1`.
 
 Strenges Plateau ist vorbereitet, aber aus: T >= 81.8 °C und
@@ -151,7 +172,7 @@ akzeptiert. Qualitätsfehler eines Kernkanals machen den Bucket ungültig.
 Featurefenster sind `(time-window, time]`, also bei lückenlosen 20-s-Buckets
 3/9/15 Werte für 1/3/5 Minuten. EC-Mittelwerte sind arithmetisch; Minimum und
 rise_from_min verwenden das 5-min-Fenster. `trend_1m` bleibt eine Regressionssteigung in mV/min (mindestens zwei Werte).
-`trend_3m` und `trend_5m` sind jetzt diagnostische Differenzen des geglätteten
+`trend_3m` und `trend_5m` bleiben Differenzen des geglätteten
 5-min-Mittelwerts:
 
 ```text
@@ -176,8 +197,9 @@ Nach einer Lücke wird die Vorgeschichte neu aufgebaut. Beide Acceleration-Werte
 sind reguläre double-precision-Spalten in Migration 004, nicht JSONB-Diagnose.
 Migration 004 wurde direkt auf das zeitbasierte Modell angepasst, weil sie noch
 nicht produktiv angewendet wurde. CREATE TABLE IF NOT EXISTS aktualisiert keine
-bereits lokal angelegte alte Tabelle. CUSUM, Trends, trend_accel, rise_from_min,
-Parameter und Prozessentscheidungen dieser Änderung bleiben unverändert.
+bereits lokal angelegte alte Tabelle. Das Schema bleibt für die Vorlauf-/Nachlaufanpassung unverändert. CUSUM-Aufbau,
+Trend-, trend_accel- und rise_from_min-Berechnungen bleiben erhalten; geändert
+werden h, die daraus abgeleitete Ausschaltgrenze und die Vorlauf-Zustandsauswertung.
 
 Bei fehlenden Buckets erzeugt der Service explizite leere 20-s-Punkte.
 Status DATENLUECKE; Baseline, S und Alarm bleiben erhalten. Zeitfenster und
@@ -233,8 +255,10 @@ bleibt erhalten. Alle neuen Panelabfragen lesen ausschließlich `process_analysi
 
 - EC Prozesssignal: raw_mv, 1-/5-min-Mittel und CUSUM-Baseline aus details.
 - Nachlauf-Detector: Nachlauf-Score 0–100, Alarm, CUSUM S, z.
-  Anzeige `LEAST(detector_score*100,100)` ist keine Wahrscheinlichkeit.
-  Schwellen 3/6 gelten ausschließlich für CUSUM S auf der rechten Achse.
+  Anzeige `50 * detector_score` ist keine Wahrscheinlichkeit: 0/25/50/75/100
+  entsprechen S/h = 0/0.5/1/1.5/≥2. Die technische Skala ist unabhängig vom
+  Boolean Alarm. Die sichtbare Schwelle 50 bedeutet S=h; Alarm EIN bleibt
+  strikt S>h. Schwellen 4/8 gelten für CUSUM S auf der rechten Achse.
 - Vergleichsmarker: rise_from_min, drei Trends sowie trend_accel_3m/5m;
   Trends mit mV/min und Trendänderungen mit mV/min² auf rechter Achse.
 - Temperatur: vapor_temp sowie dT/dt auf rechter Achse.
@@ -267,13 +291,21 @@ PYTHONPATH=backend python -m pytest backend/tests -q
 Zusätzliche Trend-Dynamiktests prüfen konstantes Signal, linearen Anstieg,
 beschleunigten Anstieg, Erholung eines negativen Trends, exakte Warmup-Grenzen,
 Lücken, Kausalität, reguläre Persistenzspalten, historische/Live-Übereinstimmung
-und die Unabhängigkeit der Detector-/Prozessentscheidungen von Diagnosefeatures.
+und die Unabhängigkeit von CUSUM/Alarm gegenüber Trendfeatures. Nur die neue
+Vorlauf-Zustandsauswertung verwendet die vorhandenen Trends.
 
 Zusätzliche zeitbasierte Tests prüfen historische NULL-Run-Messungen vom
 09.10.2026, automatisches Warmup, keine Persistenz außerhalb des Speicherfensters,
 gezieltes Ersetzen einschließlich leerer Bereiche, Erhalt anderer Versionen,
 Transaktions-Rollback und mehrere getrennte Brände mit Live-/Replay-Gleichheit.
 Auch ein Teil-Rebuild nach über 30 Minuten übernimmt die ursprüngliche Baseline.
+Neue Vorlauf-/Nachlauftests prüfen h=8, abgeleitete Hysterese, graduellen
+Score unabhängig vom Alarm und dessen Persistenz, beide Vorlauf-Stufen,
+Persistenzgrenzen, Acceleration-Spikes, Rückfall, Plateau-/Featureverlust,
+Datenlücken, Sensorfehler, MITTELLAUF-Verriegelung sowie Nachlauf-/Endevorrang.
+Ein synthetischer abklingender EC-Verlauf bestätigt mit echten Featureformeln
+identische gespeicherte Zustandswechsel live und im vollständigen/Teil-Rebuild.
+
 Die vollständige Suite umfasst Backend- und Watchdogtests; das aktuelle Ergebnis
 ist im Abschlussbericht dokumentiert. Ein gerendertes Grafana-UI und die echte
 TimescaleDB-Laufzeit sind zusätzliche Integrationsprüfungen.
@@ -290,7 +322,11 @@ curl --fail-with-body -X POST http://localhost:5000/api/analysis/rebuild \
 ```
 
 Anschließend auf den jeweiligen Brand in Grafana zoomen und dieselbe Version
-wählen. Die Rohdaten brauchen keine Zuordnung zu distillation_runs.
+wählen. Die Rohdaten brauchen keine Zuordnung zu distillation_runs. Die experimentellen
+Vorlaufgrenzen müssen anschließend an den historischen Bränden auf Plausibilität
+geprüft werden; es wurde nicht auf sensorische Referenzzeiten gefittet. In der
+aktuellen Arbeitsumgebung ist die lokale PostgreSQL-Datenbank leer, daher sind
+keine historischen Zustandswechsel oder eine Plausibilitätsbewertung verfügbar.
 
 ## J. Späterer Live-Aufruf
 

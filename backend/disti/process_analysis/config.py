@@ -21,9 +21,8 @@ class AnalysisConfig:
     detection_temperature: float = 84.0
     probable_tail_temperature: float = 86.0
     cusum_k: float = 0.75
-    cusum_h: float = 6.0
+    cusum_h: float = 8.0
     cusum_leak: float = 0.995
-    cusum_alarm_off: float = 1.8
     score_max: float = 2.0
     z_clip: float | None = None
     end_temperature_drop: float = 1.5
@@ -34,7 +33,17 @@ class AnalysisConfig:
     pt_disconnect_tolerance_mv: float = 100.0
     feature_windows_seconds: tuple[int, int, int] = (60, 180, 300)
     trend_accel_lag_seconds: int = 60
+    heads_exit_trend_3m_threshold: float = -0.10
+    heads_exit_accel_min: float = 0.0
+    heads_exit_persistence_seconds: int = 60
+    heads_middle_trend_3m_min: float = -0.05
+    heads_middle_trend_5m_min: float = -0.05
+    heads_middle_persistence_seconds: int = 120
     algo_version: str = 'cusum-v1'
+
+    @property
+    def cusum_alarm_off(self) -> float:
+        return 0.3 * self.cusum_h
 
     def __post_init__(self):
         if self.bucket_seconds <= 0 or self.baseline_half_life_seconds <= 0 or self.sigma_min_mv <= 0:
@@ -43,3 +52,5 @@ class AnalysisConfig:
             raise ValueError('invalid CUSUM parameters')
         if self.plateau_persistence < 1 or self.baseline_warmup_samples < 1:
             raise ValueError('persistence and warmup must be positive')
+        if self.heads_exit_persistence_seconds < 0 or self.heads_middle_persistence_seconds < 0:
+            raise ValueError('heads persistence must be nonnegative')
