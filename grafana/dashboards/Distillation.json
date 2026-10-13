@@ -739,7 +739,7 @@
         "type": "postgres",
         "uid": "P44368ADAD746BC27"
       },
-      "description": "Vorlauf-Diagnose aus gespeicherten Werten. VORLAUF_AUSKLANG: EC-Abfall ≥1,0 mV für 40 s. MITTELLAUF: anschließend EC-Abfall ≥2,0 mV und EC-Erholung ≥0,4 mV für 40 s, bei gültigem Plateau. Trends und dT/dt bleiben diagnostisch; keine feste Referenzzeit.",
+      "description": "Temperaturdynamische Vorlauf-Erkennung: vorher dT/dt ≥1,0 °C/min; VORLAUF bei dT/dt ≤0,30 für 40 s. VORLAUF_AUSKLANG bei stabilem 120-s-Fenster: Median |dT/dt| ≤0,12 und mindestens 80 % der Werte |dT/dt| ≤0,20. MITTELLAUF nach weiteren 90 s Bestätigung. EC, Trends und Recovery sind nur diagnostisch; keine feste Vorlauf-Temperaturgrenze.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -831,32 +831,6 @@
               {
                 "id": "unit",
                 "value": "suffix:mV"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "orange",
-                      "value": 1
-                    },
-                    {
-                      "color": "red",
-                      "value": 2
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.thresholdsStyle",
-                "value": {
-                  "mode": "line"
-                }
               }
             ]
           },
@@ -869,28 +843,6 @@
               {
                 "id": "unit",
                 "value": "suffix:mV"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "orange",
-                      "value": 0.4
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.thresholdsStyle",
-                "value": {
-                  "mode": "line"
-                }
               }
             ]
           },
@@ -903,6 +855,22 @@
               {
                 "id": "unit",
                 "value": "suffix:°C/min"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Kesseldampf (°C)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "celsius"
               },
               {
                 "id": "custom.axisPlacement",
@@ -941,7 +909,7 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT time, ec_plateau_ref AS \"EC Plateau-Referenz (mV)\", ec_min_since_plateau AS \"EC Minimum seit Plateau (mV)\", ec_drop_from_plateau AS \"EC-Abfall vom Plateau (mV)\", ec_recovery_from_min AS \"EC-Erholung vom Minimum (mV)\", dtdt AS \"dT/dt (°C/min)\", rise_from_min_5m AS \"Anstieg vom Minimum (mV)\", trend_1m AS \"Trend 1 min (mV/min)\", trend_3m AS \"Trend 3 min (mV/min)\", trend_5m AS \"Trend 5 min (mV/min)\", trend_accel_3m AS \"Trendänderung 3 min (mV/min²)\", trend_accel_5m AS \"Trendänderung 5 min (mV/min²)\" FROM process_analysis WHERE $__timeFilter(time) AND detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time;",
+          "rawSql": "SELECT time, vapor_temp AS \"Kesseldampf (°C)\", raw_mv AS \"EC raw (mV)\", ec_plateau_ref AS \"EC Plateau-Referenz (mV)\", ec_min_since_plateau AS \"EC Minimum seit Plateau (mV)\", ec_drop_from_plateau AS \"EC-Abfall vom Plateau (mV)\", ec_recovery_from_min AS \"EC-Erholung vom Minimum (mV)\", dtdt AS \"dT/dt (°C/min)\", rise_from_min_5m AS \"Anstieg vom Minimum (mV)\", trend_1m AS \"Trend 1 min (mV/min)\", trend_3m AS \"Trend 3 min (mV/min)\", trend_5m AS \"Trend 5 min (mV/min)\", trend_accel_3m AS \"Trendänderung 3 min (mV/min²)\", trend_accel_5m AS \"Trendänderung 5 min (mV/min²)\" FROM process_analysis WHERE $__timeFilter(time) AND detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time;",
           "refId": "A"
         }
       ],

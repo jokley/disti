@@ -21,7 +21,7 @@ def test_plateau_persistence_and_dt():
     for i in (1,2):
         assert a.update(p(i)).process_state==S.AUFHEIZEN
     r=a.update(p(3))
-    assert r.process_state==S.VORLAUF and r.features.dtdt==0
+    assert r.process_state==S.AUFHEIZEN and r.features.dtdt==0
     assert a.plateau_time==p(3).time
 
 def test_temperature_slope_and_time_windows():
@@ -43,7 +43,7 @@ def test_baseline_delay_and_no_forced_middle():
     r=a.update(p(18))
     assert r.details.baseline_samples==1
     for i in range(19,60): r=a.update(p(i))
-    assert r.process_state==S.VORLAUF
+    assert r.process_state==S.AUFHEIZEN
     assert r.details.baseline_samples==42
     assert r.details.baseline_sigma==1.5
 
@@ -305,7 +305,7 @@ def test_trend_dynamics_require_full_windows_and_reset_after_gaps():
     assert f.update(p(41)).trend_accel_3m is None
 
 
-def test_trend_dynamics_are_causal_and_do_not_affect_cusum():
+def test_trend_dynamics_are_causal_and_do_not_affect_process_decisions():
     a,b=ProcessAnalyzer(fast()),ProcessAnalyzer(fast())
     from disti.process_analysis.features import FeatureCalculator
     class DifferentDiagnostics(FeatureCalculator):
@@ -318,7 +318,7 @@ def test_trend_dynamics_are_causal_and_do_not_affect_cusum():
         point=p(i,t=82 if i<20 else 85,mv=100 if i<25 else 115)
         normal,altered=a.update(point),b.update(point)
         assert normal.details==altered.details
-        assert (normal.detector_score,normal.detector_alarm,normal.ended)==(altered.detector_score,altered.detector_alarm,altered.ended)
+        assert (normal.detector_score,normal.detector_alarm,normal.process_state,normal.ended)==(altered.detector_score,altered.detector_alarm,altered.process_state,altered.ended)
         prefix.append(normal)
     a.update(p(50,t=85,mv=190))
     replay=ProcessAnalyzer(fast())
@@ -513,7 +513,7 @@ def test_plateau_reference_uses_existing_mean_and_is_causal():
         assert all(getattr(r.features,name) is None for name in (
             'ec_plateau_ref','ec_drop_from_plateau','ec_min_since_plateau','ec_recovery_from_min'))
     r=a.update(p(3,mv=97))
-    assert r.process_state==S.VORLAUF
+    assert r.process_state==S.AUFHEIZEN
     assert r.features.raw_mv_1m==98 and r.features.ec_plateau_ref==98
     assert r.features.ec_plateau_ref!=r.raw_mv
     assert r.features.ec_drop_from_plateau==0 and r.features.ec_recovery_from_min==0
@@ -527,70 +527,14 @@ def test_plateau_reference_uses_existing_mean_and_is_causal():
     assert r.features.ec_plateau_ref==98  # no future mutation
 
 
-def test_ec_drop_and_recovery_two_stages_without_trend_conditions():
-    a=plateau_analyzer()
-    for i in (4,5):
-        r=a.update(p(i,mv=97))
-        assert r.process_state==S.VORLAUF
-    assert a.update(p(6,mv=97)).process_state==S.VORLAUF_AUSKLANG
-    for i in range(7,10):
-        assert a.update(p(i,mv=97)).process_state==S.VORLAUF_AUSKLANG
-    for i in range(10,14):
-        assert a.update(p(i,mv=97.5)).process_state==S.VORLAUF_AUSKLANG
-    r=a.update(p(14,mv=97.5))
-    assert r.process_state==S.MITTELLAUF
-    assert r.features.ec_drop_from_plateau==2.5
-    assert r.features.ec_recovery_from_min==.5
-    assert r.features.trend_3m is None and r.features.trend_accel_3m is None
 
 
-def test_short_drop_breaks_exit_persistence():
-    a=plateau_analyzer()
-    assert a.update(p(4,mv=97)).process_state==S.VORLAUF
-    assert a.heads_exit_since==p(4).time
-    assert a.update(p(5,mv=103)).process_state==S.VORLAUF
-    assert a.heads_exit_since is None
-    for i in range(6,10):
-        assert a.update(p(i,mv=100)).process_state==S.VORLAUF
 
 
-def test_recovery_without_sufficient_drop_cannot_enter_middle():
-    a=plateau_analyzer()
-    for i in range(4,9): a.update(p(i,mv=98.5))
-    assert a.heads_state==S.VORLAUF_AUSKLANG
-    for i in range(9,18):
-        r=a.update(p(i,mv=99))
-        assert r.process_state==S.VORLAUF_AUSKLANG
-    assert r.features.ec_recovery_from_min==.5 and r.features.ec_drop_from_plateau==1
 
 
-def test_stages_are_latched_through_small_countermovement():
-    a=plateau_analyzer()
-    for i in range(4,7): a.update(p(i,mv=97))
-    for i in range(7,13):
-        assert a.update(p(i,mv=100.2)).process_state==S.VORLAUF_AUSKLANG
-    for i in range(13,18): a.update(p(i,mv=96))
-    for i in range(18,23): r=a.update(p(i,mv=97))
-    assert r.process_state==S.MITTELLAUF
-    for i in range(23,29):
-        assert a.update(p(i,mv=100.1)).process_state==S.MITTELLAUF
 
 
-@pytest.mark.parametrize('interruption',['missing','invalid','gap','plateau'])
-def test_plateau_exit_persistence_interruptions(interruption):
-    a=plateau_analyzer()
-    a.update(p(4,mv=97));a.update(p(5,mv=97))
-    if interruption=='missing': a.update(p(6,mv=None))
-    elif interruption=='invalid': a.update(p(6,mv=97,invalid=True))
-    elif interruption=='gap': a.update(p(7,mv=97))
-    else: a.update(p(6,mv=97,t=83))  # existing dT/dt plateau predicate fails
-    assert a.heads_exit_since is None
-    assert a.ec_plateau_ref==100
-    start=8 if interruption=='gap' else 7
-    # Allow the existing temperature regression to settle after plateau loss.
-    for i in range(start,start+10):
-        r=a.update(p(i,mv=97,t=83 if interruption=='plateau' else 82))
-    assert r.process_state==S.VORLAUF_AUSKLANG
 
 
 def test_plateau_ec_reset_after_end_and_new_process():
@@ -626,69 +570,187 @@ def test_plateau_reference_requires_confirmed_temperature_gate():
         assert r.process_state==S.AUFHEIZEN and r.features.ec_plateau_ref is None
 
 
-def test_plateau_states_do_not_modify_tail_cusum_or_score():
-    normal=ProcessAnalyzer(fast())
-    disabled=ProcessAnalyzer(replace(fast(),vorlauf_ausklang_drop_mv=1000))
-    for i in range(100):
-        mv=100 if i<4 else 97 if i<10 else 97.5 if i<30 else 130
-        point=p(i,t=82 if i<30 else 85,mv=mv)
-        r,s=normal.update(point),disabled.update(point)
+
+
+
+
+
+
+
+
+class ControlledTemperatureFeatures:
+    """Supply causal slope inputs to isolate the state decision tests."""
+    def __init__(self):
+        from disti.process_analysis.models import Features
+        self.value=Features(dtdt=2,raw_mv_1m=100)
+    def reset(self):
+        pass
+    def update(self,point):
+        return self.value
+
+
+def temperature_analyzer():
+    a=ProcessAnalyzer();f=ControlledTemperatureFeatures();a.features=f
+    return a,f
+
+
+def slope_point(a,f,i,slope,**changes):
+    f.value=replace(f.value,dtdt=slope)
+    return a.update(p(i,**changes))
+
+
+def test_temperature_dynamics_config():
+    c=AnalysisConfig()
+    assert (c.heating_detect_dtdt_min,c.vorlauf_start_dtdt_max,c.vorlauf_start_persistence_seconds)==(1,.3,40)
+    assert (c.vorlauf_ausklang_window_seconds,c.vorlauf_ausklang_median_abs_dtdt_max)==(120,.12)
+    assert (c.vorlauf_ausklang_bucket_abs_dtdt_max,c.vorlauf_ausklang_required_fraction)==(.2,.8)
+    assert c.vorlauf_middle_confirm_seconds==90
+    assert c.cusum_h==8 and c.cusum_alarm_off==2.4
+
+
+def test_heating_required_and_persistent_collapse_starts_heads():
+    a,f=temperature_analyzer()
+    for i in range(10):
+        assert slope_point(a,f,i,0).process_state==S.AUFHEIZEN
+    assert not a.heating_seen
+    assert slope_point(a,f,10,1).process_state==S.AUFHEIZEN
+    assert a.heating_seen
+    assert slope_point(a,f,11,.30).process_state==S.AUFHEIZEN
+    assert slope_point(a,f,12,.30).process_state==S.AUFHEIZEN
+    assert slope_point(a,f,13,.30).process_state==S.VORLAUF
+
+
+def test_short_collapse_is_not_persistent():
+    a,f=temperature_analyzer()
+    slope_point(a,f,0,2);slope_point(a,f,1,0)
+    assert slope_point(a,f,2,.4).process_state==S.AUFHEIZEN
+    for i in (3,4): assert slope_point(a,f,i,0).process_state==S.AUFHEIZEN
+    assert slope_point(a,f,5,0).process_state==S.VORLAUF
+
+
+def test_temperature_two_stages_window_then_confirmation_and_latch():
+    a,f=temperature_analyzer()
+    for i in range(3): assert slope_point(a,f,i,2).process_state==S.AUFHEIZEN
+    for i in (3,4): assert slope_point(a,f,i,0).process_state==S.AUFHEIZEN
+    for i in range(5,7): assert slope_point(a,f,i,0).process_state==S.VORLAUF
+    # One strong slope remains among six at t=140: 5/6 stable, median zero.
+    assert slope_point(a,f,7,0).process_state==S.VORLAUF_AUSKLANG
+    for i in range(8,12): assert slope_point(a,f,i,0).process_state==S.VORLAUF_AUSKLANG
+    assert slope_point(a,f,12,0).process_state==S.MITTELLAUF # 100 s >=90 s
+    for i in range(13,20): assert slope_point(a,f,i,2).process_state==S.MITTELLAUF
+    assert slope_point(a,f,20,0,t=70).process_state==S.ENDE
+    assert not a.heating_seen and not a.heads_dtdt
+
+
+def test_single_near_zero_value_is_not_stable_window():
+    a,f=temperature_analyzer()
+    slope_point(a,f,0,2)
+    for i in range(1,10): slope_point(a,f,i,.3)
+    assert a.heads_state==S.VORLAUF
+    assert slope_point(a,f,10,0).process_state==S.VORLAUF
+
+
+def test_stable_window_tolerates_one_outlier_but_not_two():
+    a,f=temperature_analyzer()
+    slope_point(a,f,0,2)
+    for i in range(1,7): slope_point(a,f,i,.3)
+    # Four near-zero and two .3 values: median is small, fraction only 4/6.
+    for i in range(7,11): assert slope_point(a,f,i,.1).process_state==S.VORLAUF
+    assert slope_point(a,f,11,.1).process_state==S.VORLAUF_AUSKLANG
+
+
+def test_window_median_and_fraction_are_both_required():
+    a,f=temperature_analyzer()
+    slope_point(a,f,0,2)
+    for i in range(1,12):
+        assert slope_point(a,f,i,.15).process_state in (S.AUFHEIZEN,S.VORLAUF)
+    assert a.heads_state==S.VORLAUF # all below .20, but median > .12
+
+
+def test_middle_confirmation_restarts_when_plateau_is_unstable():
+    a,f=temperature_analyzer()
+    slope_point(a,f,0,2)
+    for i in range(1,7): r=slope_point(a,f,i,0)
+    assert r.process_state==S.VORLAUF_AUSKLANG
+    slope_point(a,f,7,2)
+    assert slope_point(a,f,8,2).process_state==S.VORLAUF_AUSKLANG
+    assert a.heads_middle_since is None
+    for i in range(9,13): assert slope_point(a,f,i,0).process_state==S.VORLAUF_AUSKLANG
+    assert a.heads_middle_since is None
+    assert slope_point(a,f,13,0).process_state==S.VORLAUF_AUSKLANG
+    assert a.heads_middle_since==p(13).time
+    for i in range(14,18): assert slope_point(a,f,i,0).process_state==S.VORLAUF_AUSKLANG
+    assert slope_point(a,f,18,0).process_state==S.MITTELLAUF
+
+
+@pytest.mark.parametrize('kind',['missing','invalid','gap'])
+def test_temperature_window_cannot_bridge_data_interruptions(kind):
+    a,f=temperature_analyzer()
+    slope_point(a,f,0,2)
+    for i in range(1,7): slope_point(a,f,i,0)
+    if kind=='missing': slope_point(a,f,7,0,mv=None)
+    elif kind=='invalid': slope_point(a,f,7,0,invalid=True)
+    else: slope_point(a,f,8,0)
+    assert a.heads_middle_since is None and not a.heads_dtdt
+    start=9 if kind=='gap' else 8
+    for i in range(start,start+6):
+        assert slope_point(a,f,i,0).process_state==S.VORLAUF_AUSKLANG
+    slope_point(a,f,start+6,0) # full 120 s rebuilt; start new confirmation
+    for i in range(start+7,start+11):
+        assert slope_point(a,f,i,0).process_state==S.VORLAUF_AUSKLANG
+    assert slope_point(a,f,start+11,0).process_state==S.MITTELLAUF
+
+
+@pytest.mark.parametrize('plateau',[79,82,84])
+def test_actual_temperature_curve_same_transitions_at_different_plateau_levels(plateau):
+    a=ProcessAnalyzer();states=[]
+    for i in range(35):
+        t=plateau-3+i*.5 if i<6 else plateau-.5
+        r=a.update(p(i,t=t))
+        if not states or states[-1]!=r.process_state: states.append(r.process_state)
+    assert states==[S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
+
+
+def test_ec_diagnostics_do_not_block_temperature_transitions():
+    from disti.process_analysis.models import Features
+    a,f=temperature_analyzer();b,g=temperature_analyzer()
+    for i in range(30):
+        f.value=Features(raw_mv_1m=100,trend_1m=-5,trend_3m=-5,trend_accel_3m=-5)
+        g.value=Features(raw_mv_1m=90+i,trend_1m=10,trend_3m=10,trend_accel_3m=10)
+        x=slope_point(a,f,i,2 if i<3 else 0)
+        y=slope_point(b,g,i,2 if i<3 else 0)
+        assert x.process_state==y.process_state
+    assert x.process_state==S.MITTELLAUF
+    assert x.features.ec_recovery_from_min==0 and x.features.ec_drop_from_plateau==0
+
+
+def test_temperature_changes_do_not_alter_cusum_details_or_score():
+    a=ProcessAnalyzer(fast());b=ProcessAnalyzer(replace(fast(),heating_detect_dtdt_min=1000))
+    for i in range(70):
+        t=76+.5*i if i<6 else 78.5 if i<30 else 85
+        r,s=a.update(p(i,t=t,mv=100 if i<30 else 130)),b.update(p(i,t=t,mv=100 if i<30 else 130))
         assert r.details==s.details
         assert (r.detector_score,r.detector_alarm,r.ended)==(s.detector_score,s.detector_alarm,s.ended)
-        if i==14:
-            assert r.process_state==S.MITTELLAUF and s.process_state==S.VORLAUF
-        if r.detector_alarm:
-            assert r.process_state==s.process_state==S.NACHLAUF_ENTWICKELT
-    assert normal.config.cusum_h==8 and normal.config.cusum_alarm_off==2.4
+        if i==25: assert r.process_state==S.MITTELLAUF and s.process_state==S.AUFHEIZEN
+        if r.detector_alarm: assert r.process_state==s.process_state==S.NACHLAUF_ENTWICKELT
 
 
-def test_plateau_features_states_live_and_rebuild_identical(analysis_repo):
+def test_temperature_states_live_rebuild_and_ec_diagnostics_identical(analysis_repo):
     from disti.hardware.base import SensorReading
-    for sensor in ('vapor-temp','ec-1','ec-temp'):
-        analysis_repo.ensure_sensor(sensor,sensor,'test')
+    for sensor in ('vapor-temp','ec-1','ec-temp'): analysis_repo.ensure_sensor(sensor,sensor,'test')
     for i in range(40):
-        mv=100 if i<4 else 97 if i<10 else 97.5
-        for sensor,value,raw in [('vapor-temp',82,None),('ec-1',1,mv),('ec-temp',40,1000)]:
-            analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',
-                value,'test',timestamp=p(i).time,raw_mv=raw))
+        t=76+.5*i if i<6 else 78.5
+        for sensor,value,raw in [('vapor-temp',t,None),('ec-1',1,100),('ec-temp',40,1000)]:
+            analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',value,'test',timestamp=p(i).time,raw_mv=raw))
     before=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
     service=AnalysisService(analysis_repo);a=ProcessAnalyzer()
     live=[service.process_completed_bucket(a,p(i).time) for i in range(40)]
-    transitions=[r.process_state for i,r in enumerate(live) if i==0 or r.process_state!=live[i-1].process_state]
-    assert transitions==[S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
+    changes=[r.process_state for i,r in enumerate(live) if i==0 or live[i-1].process_state!=r.process_state]
+    assert changes==[S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
     rows=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
-    assert rows[0]['ec_plateau_ref'] is None and rows[3]['ec_plateau_ref']==100
-    assert rows[14]['ec_drop_from_plateau']==2.5 and rows[14]['ec_recovery_from_min']==.5
-    assert 'ec_plateau_ref' not in json.loads(rows[14]['details'])
-    assert service.rebuild(T,p(40).time)['points_written']==40
+    assert rows[-1]['ec_drop_from_plateau']==0 and rows[-1]['ec_recovery_from_min']==0
+    service.rebuild(T,p(40).time)
     assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==rows
-    assert service.rebuild(p(12).time,p(40).time)['points_written']==28
+    service.rebuild(p(12).time,p(40).time)
     assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==rows
     assert analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')==before
-
-
-@pytest.mark.parametrize('interruption',['missing','invalid','gap'])
-def test_middle_recovery_persistence_is_interrupted(interruption):
-    a=plateau_analyzer()
-    for i in range(4,10): a.update(p(i,mv=96))
-    a.update(p(10,mv=97));a.update(p(11,mv=97))
-    assert a.heads_middle_since==p(11).time
-    if interruption=='missing': a.update(p(12,mv=None))
-    elif interruption=='invalid': a.update(p(12,mv=97,invalid=True))
-    else: a.update(p(13,mv=97))
-    assert a.heads_middle_since is None and a.heads_state==S.VORLAUF_AUSKLANG
-    start=14 if interruption=='gap' else 13
-    for i in range(start,start+3):
-        assert a.update(p(i,mv=97)).process_state==S.VORLAUF_AUSKLANG
-    assert a.update(p(start+3,mv=97)).process_state==S.MITTELLAUF
-
-
-def test_short_recovery_does_not_enter_middle():
-    a=plateau_analyzer()
-    for i in range(4,10): a.update(p(i,mv=96))
-    assert a.update(p(10,mv=100)).process_state==S.VORLAUF_AUSKLANG
-    assert a.heads_middle_since==p(10).time
-    assert a.update(p(11,mv=92)).process_state==S.VORLAUF_AUSKLANG
-    assert a.heads_middle_since is None
-    for i in range(12,18):
-        assert a.update(p(i,mv=92)).process_state==S.VORLAUF_AUSKLANG
