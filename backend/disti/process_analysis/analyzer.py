@@ -42,46 +42,42 @@ class ProcessAnalyzer:
     def _end(self):
         self.active, self.ended, self.restart_armed = False, True, False
         self.s, self.alarm = 0.0, False
+        self._reset_heads()
 
     def _reset_heads(self):
         self.heads_state = State.VORLAUF
+        self.ec_plateau_ref = self.ec_min_since_plateau = None
         self.heads_exit_since = self.heads_middle_since = None
 
     def _heads_state(self, time, features, plateau):
         c = self.config
         if self.heads_state == State.MITTELLAUF:
             return self.heads_state
-        # A clearly negative trend revokes the tentative exit. MITTELLAUF is
-        # latched; existing tail/end decisions still take precedence below.
-        if (self.heads_state == State.VORLAUF_AUSKLANG and
-                features.trend_3m is not None and
-                features.trend_3m <= c.heads_exit_trend_3m_threshold):
-            self._reset_heads()
         if not plateau:
             self.heads_exit_since = self.heads_middle_since = None
             return self.heads_state
         if self.heads_state == State.VORLAUF:
-            exiting = (features.trend_3m is not None and features.trend_accel_3m is not None and
-                       features.trend_3m > c.heads_exit_trend_3m_threshold and
-                       features.trend_accel_3m > c.heads_exit_accel_min)
+            exiting = (features.ec_drop_from_plateau is not None and
+                       features.ec_drop_from_plateau >= c.vorlauf_ausklang_drop_mv)
             if not exiting:
                 self.heads_exit_since = None
             else:
                 if self.heads_exit_since is None:
                     self.heads_exit_since = time
-                if (time-self.heads_exit_since).total_seconds() >= c.heads_exit_persistence_seconds:
+                if (time-self.heads_exit_since).total_seconds() >= c.vorlauf_ausklang_persistence_seconds:
                     self.heads_state = State.VORLAUF_AUSKLANG
                     self.heads_exit_since = None
         else:
-            stable = (features.trend_3m is not None and features.trend_5m is not None and
-                      features.trend_3m >= c.heads_middle_trend_3m_min and
-                      features.trend_5m >= c.heads_middle_trend_5m_min)
+            stable = (features.ec_drop_from_plateau is not None and
+                      features.ec_recovery_from_min is not None and
+                      features.ec_drop_from_plateau >= c.vorlauf_middle_drop_mv and
+                      features.ec_recovery_from_min >= c.vorlauf_middle_recovery_mv)
             if not stable:
                 self.heads_middle_since = None
             else:
                 if self.heads_middle_since is None:
                     self.heads_middle_since = time
-                if (time-self.heads_middle_since).total_seconds() >= c.heads_middle_persistence_seconds:
+                if (time-self.heads_middle_since).total_seconds() >= c.vorlauf_middle_persistence_seconds:
                     self.heads_state = State.MITTELLAUF
                     self.heads_middle_since = None
         return self.heads_state
@@ -136,6 +132,9 @@ class ProcessAnalyzer:
                 self.plateau_count = self.plateau_count+1 if plateau else 0
                 if self.plateau_time is None and self.plateau_count >= c.plateau_persistence:
                     self.plateau_time = point.time
+                if self.plateau_time is not None:
+                    f = FeatureCalculator.relative_to_plateau(f, self.ec_plateau_ref, self.ec_min_since_plateau)
+                    self.ec_plateau_ref, self.ec_min_since_plateau = f.ec_plateau_ref, f.ec_min_since_plateau
                 state = self._heads_state(point.time, f, plateau) if self.plateau_time else State.AUFHEIZEN
                 if t >= c.baseline_freeze_temperature:
                     self.baseline_frozen = True

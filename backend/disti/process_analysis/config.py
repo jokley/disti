@@ -33,12 +33,11 @@ class AnalysisConfig:
     pt_disconnect_tolerance_mv: float = 100.0
     feature_windows_seconds: tuple[int, int, int] = (60, 180, 300)
     trend_accel_lag_seconds: int = 60
-    heads_exit_trend_3m_threshold: float = -0.10
-    heads_exit_accel_min: float = 0.0
-    heads_exit_persistence_seconds: int = 60
-    heads_middle_trend_3m_min: float = -0.05
-    heads_middle_trend_5m_min: float = -0.05
-    heads_middle_persistence_seconds: int = 120
+    vorlauf_ausklang_drop_mv: float = 1.0
+    vorlauf_ausklang_persistence_seconds: int = 40
+    vorlauf_middle_drop_mv: float = 2.0
+    vorlauf_middle_recovery_mv: float = 0.4
+    vorlauf_middle_persistence_seconds: int = 40
     algo_version: str = 'cusum-v1'
 
     @property
@@ -52,5 +51,5 @@ class AnalysisConfig:
             raise ValueError('invalid CUSUM parameters')
         if self.plateau_persistence < 1 or self.baseline_warmup_samples < 1:
             raise ValueError('persistence and warmup must be positive')
-        if self.heads_exit_persistence_seconds < 0 or self.heads_middle_persistence_seconds < 0:
+        if self.vorlauf_ausklang_persistence_seconds < 0 or self.vorlauf_middle_persistence_seconds < 0:
             raise ValueError('heads persistence must be nonnegative')

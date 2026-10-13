@@ -143,6 +143,7 @@ def analysis_repo(repo):
     from pathlib import Path
     sql=(Path(__file__).parents[1]/'migrations/004_process_analysis.sql').read_text()
     sql=sql.replace("jsonb NOT NULL DEFAULT '{}'::jsonb", "text NOT NULL DEFAULT '{}'")
+    sql+=(Path(__file__).parents[1]/'migrations/005_plateau_ec_features.sql').read_text().replace('ADD COLUMN IF NOT EXISTS','ADD COLUMN')
     conn=repo.connection_factory();conn.executescript(sql);conn.close()
     return repo
 
@@ -487,147 +488,6 @@ def test_score_before_alarm_and_strict_hysteresis_boundaries():
     assert r.details.cusum_s<2.4 and not r.detector_alarm
 
 
-class ControlledHeadsFeatures:
-    """Unit-test fixture: supply feature values without changing their formulas."""
-    def __init__(self):
-        from disti.process_analysis.models import Features
-        self.value=Features(dtdt=0,trend_3m=-1,trend_5m=-1,trend_accel_3m=.1)
-    def reset(self):
-        pass
-    def update(self,point):
-        return self.value
-
-
-def heads_analyzer():
-    a=ProcessAnalyzer(fast())
-    for i in range(4): a.update(p(i))
-    features=ControlledHeadsFeatures()
-    a.features=features
-    return a,features
-
-
-def head_point(a,features,i,trend=-.08,trend5=-.08,accel=.1,dtdt=0,**input_changes):
-    features.value=replace(features.value,dtdt=dtdt,trend_3m=trend,trend_5m=trend5,trend_accel_3m=accel)
-    return a.update(p(i,**input_changes))
-
-
-def test_heads_plateau_gate_and_clear_negative_trend():
-    a=ProcessAnalyzer(fast());f=ControlledHeadsFeatures();a.features=f
-    for i in range(10):
-        assert head_point(a,f,i,trend=0,accel=.1,dtdt=2).process_state==S.AUFHEIZEN
-    assert a.plateau_time is None
-    for i in range(10,13): head_point(a,f,i,trend=-1)
-    assert a.plateau_time==p(12).time
-    for i in range(13,25):
-        assert head_point(a,f,i,trend=-1).process_state==S.VORLAUF
-
-
-def test_heads_two_stage_persistence_and_middle_latch():
-    a,f=heads_analyzer()
-    for i in range(4,7):
-        assert head_point(a,f,i).process_state==S.VORLAUF
-    assert head_point(a,f,7).process_state==S.VORLAUF_AUSKLANG
-    for i in range(8,14):
-        assert head_point(a,f,i,trend=0,trend5=0,accel=0).process_state==S.VORLAUF_AUSKLANG
-    assert head_point(a,f,14,trend=0,trend5=0,accel=0).process_state==S.MITTELLAUF
-    # A later negative trend or loss of plateau must not revoke MITTELLAUF.
-    assert head_point(a,f,15,trend=-1,trend5=-1,accel=-.1,dtdt=2).process_state==S.MITTELLAUF
-    assert head_point(a,f,16,t=70).process_state==S.ENDE
-    assert head_point(a,f,17).process_state==S.AUFHEIZEN
-    assert a.heads_state==S.VORLAUF and a.heads_middle_since is None
-
-
-def test_short_acceleration_spike_and_strict_exit_thresholds():
-    a,f=heads_analyzer()
-    assert head_point(a,f,4).process_state==S.VORLAUF
-    assert head_point(a,f,5).process_state==S.VORLAUF
-    assert head_point(a,f,6,accel=0).process_state==S.VORLAUF
-    assert a.heads_exit_since is None
-    for i in range(7,12):
-        assert head_point(a,f,i,trend=-.10).process_state==S.VORLAUF
-    for i in range(12,15):
-        assert head_point(a,f,i).process_state==S.VORLAUF
-    assert head_point(a,f,15).process_state==S.VORLAUF_AUSKLANG
-
-
-def test_heads_exit_falls_back_and_restarts_persistence():
-    a,f=heads_analyzer()
-    for i in range(4,8): head_point(a,f,i)
-    assert head_point(a,f,8,trend=0,trend5=0).process_state==S.VORLAUF_AUSKLANG
-    assert head_point(a,f,9,trend=-.2).process_state==S.VORLAUF
-    assert a.heads_middle_since is None
-    for i in range(10,13):
-        assert head_point(a,f,i).process_state==S.VORLAUF
-    assert head_point(a,f,13).process_state==S.VORLAUF_AUSKLANG
-
-
-@pytest.mark.parametrize('interruption',['missing','invalid','gap','plateau'])
-def test_heads_exit_persistence_is_interrupted(interruption):
-    a,f=heads_analyzer()
-    head_point(a,f,4);head_point(a,f,5)
-    if interruption=='missing': head_point(a,f,6,mv=None)
-    elif interruption=='invalid': head_point(a,f,6,invalid=True)
-    elif interruption=='gap': head_point(a,f,7)
-    else: head_point(a,f,6,dtdt=2)
-    start=8 if interruption=='gap' else 7
-    for i in range(start,start+3):
-        assert head_point(a,f,i).process_state==S.VORLAUF
-    assert head_point(a,f,start+3).process_state==S.VORLAUF_AUSKLANG
-
-
-@pytest.mark.parametrize('interruption',['missing','invalid','gap','plateau','trend3','trend5','unknown'])
-def test_middle_needs_both_trends_plateau_and_unbroken_persistence(interruption):
-    a,f=heads_analyzer()
-    for i in range(4,8): head_point(a,f,i)
-    for i in range(8,11): head_point(a,f,i,trend=0,trend5=0)
-    changes={'trend':0,'trend5':0}
-    if interruption=='missing': changes['mv']=None
-    elif interruption=='invalid': changes['invalid']=True
-    elif interruption=='plateau': changes['dtdt']=2
-    elif interruption=='trend3': changes['trend']=-.08
-    elif interruption=='trend5': changes['trend5']=-.08
-    elif interruption=='unknown': changes['trend5']=None
-    index=12 if interruption=='gap' else 11
-    head_point(a,f,index,**changes)
-    for i in range(index+1,index+7):
-        assert head_point(a,f,i,trend=-.05,trend5=-.05).process_state==S.VORLAUF_AUSKLANG
-    assert head_point(a,f,index+7,trend=-.05,trend5=-.05).process_state==S.MITTELLAUF
-
-
-def test_middle_is_overridden_by_tail_and_end_and_reset_clears_heads():
-    a,f=heads_analyzer()
-    for i in range(4,8): head_point(a,f,i)
-    for i in range(8,15): head_point(a,f,i,trend=0,trend5=0)
-    assert a.heads_state==S.MITTELLAUF
-    assert head_point(a,f,15,t=85,mv=130).process_state==S.NACHLAUF_ENTWICKELT
-    assert head_point(a,f,16,t=86,mv=130).process_state==S.NACHLAUF_WAHRSCHEINLICH
-    assert head_point(a,f,17,t=70).process_state==S.ENDE
-    a.reset()
-    assert a.heads_state==S.VORLAUF and a.heads_exit_since is None and a.heads_middle_since is None
-
-
-def test_heads_actual_features_live_and_rebuild_identical(analysis_repo):
-    from disti.hardware.base import SensorReading
-    for sensor in ('vapor-temp','ec-1','ec-temp'):
-        analysis_repo.ensure_sensor(sensor,sensor,'test')
-    for i in range(150):
-        mv=100+20*math.exp(-(i/3)/3)
-        for sensor,value,raw in [('vapor-temp',82,None),('ec-1',1,mv),('ec-temp',40,1000)]:
-            analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',
-                value,'test',timestamp=p(i).time,raw_mv=raw))
-    before=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
-    service=AnalysisService(analysis_repo);a=ProcessAnalyzer()
-    live=[service.process_completed_bucket(a,p(i).time) for i in range(150)]
-    transitions=[r.process_state for i,r in enumerate(live) if i==0 or r.process_state!=live[i-1].process_state]
-    assert transitions==[S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
-    rows=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
-    assert service.rebuild(T,p(150).time)['points_written']==150
-    assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==rows
-    assert service.rebuild(p(100).time,p(150).time)['points_written']==50
-    assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==rows
-    assert analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')==before
-
-
 def test_alarm_off_boundary_is_strict_with_exactly_representable_values():
     # h=10 gives alarm_off=3, so the strict equality check avoids rounding at
     # the default decimal 2.4. The default values are covered above.
@@ -637,3 +497,198 @@ def test_alarm_off_boundary_is_strict_with_exactly_representable_values():
     r=a.update(p(5,t=85,mv=99.5))
     assert r.details.cusum_s==a.config.cusum_alarm_off==3 and r.detector_alarm
     assert not a.update(p(6,t=85,mv=100)).detector_alarm
+
+
+def plateau_analyzer(config=None):
+    a=ProcessAnalyzer(config or AnalysisConfig())
+    for i in range(4): a.update(p(i))
+    assert a.plateau_time==p(3).time and a.ec_plateau_ref==100
+    return a
+
+
+def test_plateau_reference_uses_existing_mean_and_is_causal():
+    a=ProcessAnalyzer()
+    for i,mv in enumerate((100,99,98)):
+        r=a.update(p(i,mv=mv))
+        assert all(getattr(r.features,name) is None for name in (
+            'ec_plateau_ref','ec_drop_from_plateau','ec_min_since_plateau','ec_recovery_from_min'))
+    r=a.update(p(3,mv=97))
+    assert r.process_state==S.VORLAUF
+    assert r.features.raw_mv_1m==98 and r.features.ec_plateau_ref==98
+    assert r.features.ec_plateau_ref!=r.raw_mv
+    assert r.features.ec_drop_from_plateau==0 and r.features.ec_recovery_from_min==0
+    assert r.features.ec_min_since_plateau==98
+    r=a.update(p(4,mv=96))
+    assert r.features.ec_plateau_ref==98 and r.features.ec_drop_from_plateau==1
+    assert r.features.ec_min_since_plateau==97 and r.features.ec_recovery_from_min==0
+    prefix=[ProcessAnalyzer().update(p(0))]
+    b=ProcessAnalyzer();assert b.update(p(0))==prefix[0]
+    a.update(p(5,mv=180))
+    assert r.features.ec_plateau_ref==98  # no future mutation
+
+
+def test_ec_drop_and_recovery_two_stages_without_trend_conditions():
+    a=plateau_analyzer()
+    for i in (4,5):
+        r=a.update(p(i,mv=97))
+        assert r.process_state==S.VORLAUF
+    assert a.update(p(6,mv=97)).process_state==S.VORLAUF_AUSKLANG
+    for i in range(7,10):
+        assert a.update(p(i,mv=97)).process_state==S.VORLAUF_AUSKLANG
+    for i in range(10,14):
+        assert a.update(p(i,mv=97.5)).process_state==S.VORLAUF_AUSKLANG
+    r=a.update(p(14,mv=97.5))
+    assert r.process_state==S.MITTELLAUF
+    assert r.features.ec_drop_from_plateau==2.5
+    assert r.features.ec_recovery_from_min==.5
+    assert r.features.trend_3m is None and r.features.trend_accel_3m is None
+
+
+def test_short_drop_breaks_exit_persistence():
+    a=plateau_analyzer()
+    assert a.update(p(4,mv=97)).process_state==S.VORLAUF
+    assert a.heads_exit_since==p(4).time
+    assert a.update(p(5,mv=103)).process_state==S.VORLAUF
+    assert a.heads_exit_since is None
+    for i in range(6,10):
+        assert a.update(p(i,mv=100)).process_state==S.VORLAUF
+
+
+def test_recovery_without_sufficient_drop_cannot_enter_middle():
+    a=plateau_analyzer()
+    for i in range(4,9): a.update(p(i,mv=98.5))
+    assert a.heads_state==S.VORLAUF_AUSKLANG
+    for i in range(9,18):
+        r=a.update(p(i,mv=99))
+        assert r.process_state==S.VORLAUF_AUSKLANG
+    assert r.features.ec_recovery_from_min==.5 and r.features.ec_drop_from_plateau==1
+
+
+def test_stages_are_latched_through_small_countermovement():
+    a=plateau_analyzer()
+    for i in range(4,7): a.update(p(i,mv=97))
+    for i in range(7,13):
+        assert a.update(p(i,mv=100.2)).process_state==S.VORLAUF_AUSKLANG
+    for i in range(13,18): a.update(p(i,mv=96))
+    for i in range(18,23): r=a.update(p(i,mv=97))
+    assert r.process_state==S.MITTELLAUF
+    for i in range(23,29):
+        assert a.update(p(i,mv=100.1)).process_state==S.MITTELLAUF
+
+
+@pytest.mark.parametrize('interruption',['missing','invalid','gap','plateau'])
+def test_plateau_exit_persistence_interruptions(interruption):
+    a=plateau_analyzer()
+    a.update(p(4,mv=97));a.update(p(5,mv=97))
+    if interruption=='missing': a.update(p(6,mv=None))
+    elif interruption=='invalid': a.update(p(6,mv=97,invalid=True))
+    elif interruption=='gap': a.update(p(7,mv=97))
+    else: a.update(p(6,mv=97,t=83))  # existing dT/dt plateau predicate fails
+    assert a.heads_exit_since is None
+    assert a.ec_plateau_ref==100
+    start=8 if interruption=='gap' else 7
+    # Allow the existing temperature regression to settle after plateau loss.
+    for i in range(start,start+10):
+        r=a.update(p(i,mv=97,t=83 if interruption=='plateau' else 82))
+    assert r.process_state==S.VORLAUF_AUSKLANG
+
+
+def test_plateau_ec_reset_after_end_and_new_process():
+    a=plateau_analyzer()
+    for i in range(4,7): a.update(p(i,mv=97))
+    r=a.update(p(7,t=70,mv=97))
+    assert r.process_state==S.ENDE
+    assert a.ec_plateau_ref is None and a.ec_min_since_plateau is None
+    assert r.features.ec_plateau_ref is None
+    for i in range(8,11):
+        r=a.update(p(i,mv=110))
+        assert r.features.ec_plateau_ref is None
+    r=a.update(p(11,mv=110))
+    assert r.features.ec_plateau_ref==110 and r.features.ec_min_since_plateau==110
+    a.reset()
+    assert a.ec_plateau_ref is None and a.ec_min_since_plateau is None
+
+
+def test_plateau_ec_minimum_survives_gaps_and_is_not_a_rolling_minimum():
+    a=plateau_analyzer()
+    for i in range(4,7): a.update(p(i,mv=97))
+    assert a.update(p(7,mv=None)).features.ec_plateau_ref is None
+    for i in range(8,45): r=a.update(p(i,mv=98))
+    assert r.features.running_min_5m==98
+    assert r.features.ec_min_since_plateau==97 and r.features.ec_recovery_from_min==1
+    assert r.features.ec_plateau_ref==100 and r.features.ec_drop_from_plateau==2
+
+
+def test_plateau_reference_requires_confirmed_temperature_gate():
+    a=ProcessAnalyzer()
+    for i in range(20):
+        r=a.update(p(i,t=76+i/2,mv=100-i))
+        assert r.process_state==S.AUFHEIZEN and r.features.ec_plateau_ref is None
+
+
+def test_plateau_states_do_not_modify_tail_cusum_or_score():
+    normal=ProcessAnalyzer(fast())
+    disabled=ProcessAnalyzer(replace(fast(),vorlauf_ausklang_drop_mv=1000))
+    for i in range(100):
+        mv=100 if i<4 else 97 if i<10 else 97.5 if i<30 else 130
+        point=p(i,t=82 if i<30 else 85,mv=mv)
+        r,s=normal.update(point),disabled.update(point)
+        assert r.details==s.details
+        assert (r.detector_score,r.detector_alarm,r.ended)==(s.detector_score,s.detector_alarm,s.ended)
+        if i==14:
+            assert r.process_state==S.MITTELLAUF and s.process_state==S.VORLAUF
+        if r.detector_alarm:
+            assert r.process_state==s.process_state==S.NACHLAUF_ENTWICKELT
+    assert normal.config.cusum_h==8 and normal.config.cusum_alarm_off==2.4
+
+
+def test_plateau_features_states_live_and_rebuild_identical(analysis_repo):
+    from disti.hardware.base import SensorReading
+    for sensor in ('vapor-temp','ec-1','ec-temp'):
+        analysis_repo.ensure_sensor(sensor,sensor,'test')
+    for i in range(40):
+        mv=100 if i<4 else 97 if i<10 else 97.5
+        for sensor,value,raw in [('vapor-temp',82,None),('ec-1',1,mv),('ec-temp',40,1000)]:
+            analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',
+                value,'test',timestamp=p(i).time,raw_mv=raw))
+    before=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
+    service=AnalysisService(analysis_repo);a=ProcessAnalyzer()
+    live=[service.process_completed_bucket(a,p(i).time) for i in range(40)]
+    transitions=[r.process_state for i,r in enumerate(live) if i==0 or r.process_state!=live[i-1].process_state]
+    assert transitions==[S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
+    rows=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
+    assert rows[0]['ec_plateau_ref'] is None and rows[3]['ec_plateau_ref']==100
+    assert rows[14]['ec_drop_from_plateau']==2.5 and rows[14]['ec_recovery_from_min']==.5
+    assert 'ec_plateau_ref' not in json.loads(rows[14]['details'])
+    assert service.rebuild(T,p(40).time)['points_written']==40
+    assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==rows
+    assert service.rebuild(p(12).time,p(40).time)['points_written']==28
+    assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==rows
+    assert analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')==before
+
+
+@pytest.mark.parametrize('interruption',['missing','invalid','gap'])
+def test_middle_recovery_persistence_is_interrupted(interruption):
+    a=plateau_analyzer()
+    for i in range(4,10): a.update(p(i,mv=96))
+    a.update(p(10,mv=97));a.update(p(11,mv=97))
+    assert a.heads_middle_since==p(11).time
+    if interruption=='missing': a.update(p(12,mv=None))
+    elif interruption=='invalid': a.update(p(12,mv=97,invalid=True))
+    else: a.update(p(13,mv=97))
+    assert a.heads_middle_since is None and a.heads_state==S.VORLAUF_AUSKLANG
+    start=14 if interruption=='gap' else 13
+    for i in range(start,start+3):
+        assert a.update(p(i,mv=97)).process_state==S.VORLAUF_AUSKLANG
+    assert a.update(p(start+3,mv=97)).process_state==S.MITTELLAUF
+
+
+def test_short_recovery_does_not_enter_middle():
+    a=plateau_analyzer()
+    for i in range(4,10): a.update(p(i,mv=96))
+    assert a.update(p(10,mv=100)).process_state==S.VORLAUF_AUSKLANG
+    assert a.heads_middle_since==p(10).time
+    assert a.update(p(11,mv=92)).process_state==S.VORLAUF_AUSKLANG
+    assert a.heads_middle_since is None
+    for i in range(12,18):
+        assert a.update(p(i,mv=92)).process_state==S.VORLAUF_AUSKLANG
