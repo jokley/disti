@@ -80,6 +80,21 @@ services:
       disti-network:
         ipv4_address: 172.16.238.19
 
+  analysis-worker:
+    container_name: disti-analysis-worker
+    image: disti-backend
+    build:
+      context: ./backend
+    command: ["python", "-m", "entrypoints.analysis_worker"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_started
+    env_file:
+      - disti.env
+    networks:
+      disti-network:
+
   watchdog:
     container_name: disti-watchdog
     build:

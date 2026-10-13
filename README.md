@@ -24,7 +24,7 @@ piTerminal/               Raspberry Pi kiosk and rollout tooling
 scripts/                  Operator update helpers
 ```
 
-The `api` and `hardware-agent` services build the same `disti-backend` image
+The `api`, `hardware-agent`, and `analysis-worker` services build the same `disti-backend` image
 but run separate entrypoints. Acquisition failures therefore cannot restart the
 API. The single production stack grants only `hardware-agent` access to
 `/dev/i2c-1` and selects Raspberry hardware acquisition. Sensor
@@ -71,11 +71,11 @@ docker compose exec -T api python -m entrypoints.migrate
 docker compose up -d
 ```
 
-On the ARM64 Pi, rebuild and recreate both Python runtime services without
+On the ARM64 Pi, rebuild and recreate all three Python runtime services without
 restarting their dependencies:
 
 ```sh
-docker compose up -d --build --no-deps --force-recreate api hardware-agent
+docker compose up -d --build --no-deps --force-recreate api hardware-agent analysis-worker
 ```
 
 Migrations run inside the already allocated API container. Do not use
@@ -98,7 +98,7 @@ and generates its hashed runtime-only password file before broker startup. Every
 The same file supplies PostgreSQL initialization and every database client,
 using one canonical contract: `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`,
 and `POSTGRES_PASSWORD`. Compose injects `disti.env` directly into PostgreSQL,
-api, hardware-agent, watchdog, and Grafana, so normal operator commands do
+api, hardware-agent, analysis-worker, watchdog, and Grafana, so normal operator commands do
 not need `--env-file`:
 
 ```sh
@@ -335,11 +335,18 @@ for direct Grafana queries.
 
 The experimental process analyzer is isolated in `disti.process_analysis`.
 `POST /api/analysis/rebuild` replays completed 20-second raw-data buckets through
-the same engine prepared for incremental live processing, independently of run IDs
+the same engine used by the continuous `analysis-worker`, independently of run IDs
 (including NULL run assignments). Rebuilds warm up from available sensor history
 and atomically replace only the requested time range. Migration 004 stores
 versioned generic detector outputs in `process_analysis`; the experimental
 Grafana panels read those outputs. No automatic cuts or notifications are enabled.
+The worker polls for completed buckets every two seconds, restores analyzer state
+from raw history after restart, and writes only the missing tail using existing
+upserts. It runs separately from Gunicorn and acquisition; no duplicate API-worker
+loops. Migrations 004/005 must be applied before analysis writes can succeed.
+The operating dashboard leads with current state, compact timeline and core values;
+all EC/trend/CUSUM diagnostics remain under the collapsed **Diagnose / Entwicklung**
+row. The existing **Rohdaten / Engineering** row retains raw-data panels.
 See [process analysis documentation](docs/grafana-experimental-analysis.md) for
 parameters, rebuild examples, live integration, and validation limits.
 
