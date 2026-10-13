@@ -27,6 +27,7 @@ class ProcessAnalyzer:
         self.s = 0.0
         self.alarm = False
         self.features = FeatureCalculator(self.config)
+        self._reset_heads()
 
     def _start(self):
         self.active, self.ended = True, False
@@ -36,10 +37,54 @@ class ProcessAnalyzer:
         self.baseline_frozen = False
         self.s, self.alarm = 0.0, False
         self.features.reset()
+        self._reset_heads()
 
     def _end(self):
         self.active, self.ended, self.restart_armed = False, True, False
         self.s, self.alarm = 0.0, False
+
+    def _reset_heads(self):
+        self.heads_state = State.VORLAUF
+        self.heads_exit_since = self.heads_middle_since = None
+
+    def _heads_state(self, time, features, plateau):
+        c = self.config
+        if self.heads_state == State.MITTELLAUF:
+            return self.heads_state
+        # A clearly negative trend revokes the tentative exit. MITTELLAUF is
+        # latched; existing tail/end decisions still take precedence below.
+        if (self.heads_state == State.VORLAUF_AUSKLANG and
+                features.trend_3m is not None and
+                features.trend_3m <= c.heads_exit_trend_3m_threshold):
+            self._reset_heads()
+        if not plateau:
+            self.heads_exit_since = self.heads_middle_since = None
+            return self.heads_state
+        if self.heads_state == State.VORLAUF:
+            exiting = (features.trend_3m is not None and features.trend_accel_3m is not None and
+                       features.trend_3m > c.heads_exit_trend_3m_threshold and
+                       features.trend_accel_3m > c.heads_exit_accel_min)
+            if not exiting:
+                self.heads_exit_since = None
+            else:
+                if self.heads_exit_since is None:
+                    self.heads_exit_since = time
+                if (time-self.heads_exit_since).total_seconds() >= c.heads_exit_persistence_seconds:
+                    self.heads_state = State.VORLAUF_AUSKLANG
+                    self.heads_exit_since = None
+        else:
+            stable = (features.trend_3m is not None and features.trend_5m is not None and
+                      features.trend_3m >= c.heads_middle_trend_3m_min and
+                      features.trend_5m >= c.heads_middle_trend_5m_min)
+            if not stable:
+                self.heads_middle_since = None
+            else:
+                if self.heads_middle_since is None:
+                    self.heads_middle_since = time
+                if (time-self.heads_middle_since).total_seconds() >= c.heads_middle_persistence_seconds:
+                    self.heads_state = State.MITTELLAUF
+                    self.heads_middle_since = None
+        return self.heads_state
 
     def update(self, point: AnalysisInput) -> AnalysisResult:
         c = self.config
@@ -56,11 +101,13 @@ class ProcessAnalyzer:
         invalid |= point.raw_mv is not None and point.raw_mv > c.ec_max_mv
         invalid |= point.pt_raw_mv is not None and abs(point.pt_raw_mv-c.pt_disconnect_mv) <= c.pt_disconnect_tolerance_mv
         if gap or missing:
+            self.heads_exit_since = self.heads_middle_since = None
             self.features.reset()
             self.plateau_count = 0
             self.invalid_since = None
             state = State.ENDE if self.ended else State.DATENLUECKE
         elif invalid:
+            self.heads_exit_since = self.heads_middle_since = None
             self.features.reset()
             self.plateau_count = 0
             if self.invalid_since is None:
@@ -89,7 +136,7 @@ class ProcessAnalyzer:
                 self.plateau_count = self.plateau_count+1 if plateau else 0
                 if self.plateau_time is None and self.plateau_count >= c.plateau_persistence:
                     self.plateau_time = point.time
-                state = State.VORLAUF if self.plateau_time else State.AUFHEIZEN
+                state = self._heads_state(point.time, f, plateau) if self.plateau_time else State.AUFHEIZEN
                 if t >= c.baseline_freeze_temperature:
                     self.baseline_frozen = True
                 ready_time = self.plateau_time is not None and (point.time-self.plateau_time).total_seconds() >= c.baseline_delay_seconds

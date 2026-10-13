@@ -575,7 +575,7 @@
         "type": "postgres",
         "uid": "P44368ADAD746BC27"
       },
-      "description": "Experimentelle Validierung; keine automatische Schnittentscheidung. Nachlauf-Score ist keine statistische Wahrscheinlichkeit.",
+      "description": "Nachlauf-Score = 50 × detector_score: 25 = halbe Schwelle, 50 = S/h 1, 75 = S/h 1,5, 100 = S/h ≥2. Technischer Score, keine statistische Wahrscheinlichkeit; keine automatische Schnittentscheidung.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -647,11 +647,11 @@
                     },
                     {
                       "color": "orange",
-                      "value": 3
+                      "value": 4
                     },
                     {
                       "color": "red",
-                      "value": 6
+                      "value": 8
                     }
                   ]
                 }
@@ -660,6 +660,38 @@
                 "id": "custom.thresholdsStyle",
                 "value": {
                   "mode": "line"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Nachlauf-Score"
+            },
+            "properties": [
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 50
+                    }
+                  ]
                 }
               }
             ]
@@ -695,7 +727,7 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT time, LEAST(detector_score * 100, 100) AS \"Nachlauf-Score\", detector_alarm::int AS \"Alarm\", (details->>'cusum_s')::double precision AS \"CUSUM S\", (details->>'z')::double precision AS \"z\" FROM process_analysis WHERE $__timeFilter(time) AND detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time;",
+          "rawSql": "SELECT time, 50 * detector_score AS \"Nachlauf-Score\", detector_alarm::int AS \"Alarm\", (details->>'cusum_s')::double precision AS \"CUSUM S\", (details->>'z')::double precision AS \"z\" FROM process_analysis WHERE $__timeFilter(time) AND detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time;",
           "refId": "A"
         }
       ],
@@ -707,7 +739,7 @@
         "type": "postgres",
         "uid": "P44368ADAD746BC27"
       },
-      "description": "Diagnostische Trends aus raw_mv_5m und deren Änderung über eine Minute. Keine Alarm- oder Prozessentscheidungen.",
+      "description": "Persistierte EC-Trends und Trendänderungen zur Diagnose des Vorlauf-Übergangs; rise_from_min_5m bleibt diagnostisch.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1094,7 +1126,7 @@
         "type": "postgres",
         "uid": "P44368ADAD746BC27"
       },
-      "description": "Experimentelle Validierung; keine automatische Schnittentscheidung. Nachlauf-Score ist keine statistische Wahrscheinlichkeit.",
+      "description": "Nachlauf-Score = 50 × detector_score: 25 = halbe Schwelle, 50 = S/h 1, 75 = S/h 1,5, 100 = S/h ≥2. Technischer Score, keine statistische Wahrscheinlichkeit; keine automatische Schnittentscheidung.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1156,6 +1188,38 @@
                 "value": "celsius"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Nachlauf-Score"
+            },
+            "properties": [
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 50
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -1189,7 +1253,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT time, vapor_temp AS \"Kesseldampf\", LEAST(detector_score * 100,100) AS \"Nachlauf-Score\", detector_alarm::int AS \"Alarm\", process_state AS \"Prozessstatus\" FROM process_analysis WHERE $__timeFilter(time) AND detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time DESC LIMIT 1;",
+          "rawSql": "SELECT time, vapor_temp AS \"Kesseldampf\", 50 * detector_score AS \"Nachlauf-Score\", detector_alarm::int AS \"Alarm\", process_state AS \"Prozessstatus\" FROM process_analysis WHERE $__timeFilter(time) AND detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time DESC LIMIT 1;",
           "refId": "A"
         }
       ],

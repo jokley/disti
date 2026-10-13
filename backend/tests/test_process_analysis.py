@@ -58,17 +58,17 @@ def test_ew_variance_and_sigma():
 def test_freeze_z_cusum_hysteresis_temperature_gates():
     a=ProcessAnalyzer(fast())
     for i in range(5): a.update(p(i))
-    r=a.update(p(5,t=85,mv=115))
+    r=a.update(p(5,t=85,mv=120))
     assert r.details.baseline_frozen
     assert r.details.baseline_mu==100
-    assert r.details.z==pytest.approx(15/r.details.baseline_sigma)
+    assert r.details.z==pytest.approx(20/r.details.baseline_sigma)
     assert r.details.cusum_s==pytest.approx(r.details.z-.75)
     assert r.detector_alarm and r.process_state==S.NACHLAUF_ENTWICKELT
     prev=r.details.cusum_s
     r=a.update(p(6,t=86,mv=101))
     assert r.process_state==S.NACHLAUF_WAHRSCHEINLICH
     assert r.details.cusum_s==pytest.approx(.995*prev+r.details.z-.75)
-    assert r.detector_score==min(r.details.cusum_s/6,2)
+    assert r.detector_score==min(r.details.cusum_s/8,2)
     r=a.update(p(7,t=86,mv=80))
     assert not r.detector_alarm and r.details.cusum_s==0
 
@@ -200,8 +200,8 @@ def test_baseline_frozen_is_latched_and_alarm_threshold_strict():
     a=ProcessAnalyzer(fast(sigma_min_mv=2.0))
     for i in range(5): a.update(p(i))
     sigma=max(math.sqrt(a.var),a.config.sigma_min_mv)
-    r=a.update(p(5,t=85,mv=100+sigma*(6+.75)))
-    assert r.details.cusum_s==pytest.approx(6) and not r.detector_alarm
+    r=a.update(p(5,t=85,mv=100+sigma*(8+.75)))
+    assert r.details.cusum_s==pytest.approx(8) and not r.detector_alarm
 
 def test_rebuild_ignores_run_assignments_and_excludes_partial_buckets(analysis_repo):
     seed(analysis_repo)
@@ -254,13 +254,13 @@ def test_live_reads_one_bucket_and_matches_rebuild(analysis_repo):
 def test_alarm_holds_between_on_and_off_thresholds():
     a=ProcessAnalyzer(fast(sigma_min_mv=2))
     for i in range(5): a.update(p(i))
-    assert a.update(p(5,t=85,mv=115)).detector_alarm
-    for i in range(6,9):
+    assert a.update(p(5,t=85,mv=120)).detector_alarm
+    for i in range(6,13):
         r=a.update(p(i,t=85,mv=100))
-        if 1.8 <= r.details.cusum_s <= 6:
+        if 2.4 <= r.details.cusum_s <= 8:
             assert r.detector_alarm
-    assert 1.8 < r.details.cusum_s < 6 and r.detector_alarm
-    for i in range(9,20): r=a.update(p(i,t=85,mv=100))
+    assert 2.4 < r.details.cusum_s < 8 and r.detector_alarm
+    for i in range(13,30): r=a.update(p(i,t=85,mv=100))
     assert r.details.cusum_s==0 and not r.detector_alarm
 
 @pytest.mark.parametrize('signal,trend,acceleration', [
@@ -304,7 +304,7 @@ def test_trend_dynamics_require_full_windows_and_reset_after_gaps():
     assert f.update(p(41)).trend_accel_3m is None
 
 
-def test_trend_dynamics_are_causal_and_diagnostic_only():
+def test_trend_dynamics_are_causal_and_do_not_affect_cusum():
     a,b=ProcessAnalyzer(fast()),ProcessAnalyzer(fast())
     from disti.process_analysis.features import FeatureCalculator
     class DifferentDiagnostics(FeatureCalculator):
@@ -317,7 +317,7 @@ def test_trend_dynamics_are_causal_and_diagnostic_only():
         point=p(i,t=82 if i<20 else 85,mv=100 if i<25 else 115)
         normal,altered=a.update(point),b.update(point)
         assert normal.details==altered.details
-        assert (normal.detector_score,normal.detector_alarm,normal.process_state,normal.ended)==(altered.detector_score,altered.detector_alarm,altered.process_state,altered.ended)
+        assert (normal.detector_score,normal.detector_alarm,normal.ended)==(altered.detector_score,altered.detector_alarm,altered.ended)
         prefix.append(normal)
     a.update(p(50,t=85,mv=190))
     replay=ProcessAnalyzer(fast())
@@ -445,3 +445,195 @@ def test_api_rejects_run_filter_and_naive_timestamps(analysis_repo):
     base={'from':T.isoformat(),'to':p(40).time.isoformat()}
     assert client.post('/api/analysis/rebuild',json={**base,'run_id':'11111111-1111-1111-1111-111111111111'}).status_code==400
     assert client.post('/api/analysis/rebuild',json={**base,'from':'2026-01-01T00:00:00'}).status_code==400
+
+
+def test_tail_config_and_derived_hysteresis():
+    c=AnalysisConfig()
+    assert c.cusum_h==8 and c.cusum_alarm_off==2.4
+    assert replace(c,cusum_h=10).cusum_alarm_off==3
+    assert (c.cusum_k,c.sigma_min_mv,c.cusum_leak,c.z_clip)==(.75,1.5,.995,None)
+
+
+@pytest.mark.parametrize('s,score',[(0,0),(4,.5),(8,1),(12,1.5),(16,2),(24,2)])
+@pytest.mark.parametrize('alarm',[False,True])
+def test_detector_score_is_gradual_independent_of_alarm_and_persisted(analysis_repo,s,score,alarm):
+    a=ProcessAnalyzer(fast())
+    for i in range(5): a.update(p(i))
+    # Below the existing detection gate, S and alarm are preserved. This lets
+    # us verify all technical score levels independently of Boolean hysteresis.
+    a.s,a.alarm=s,alarm
+    result=AnalysisService(analysis_repo,a.config).save_completed_point(a,p(5,t=83))
+    assert result.detector_score==score and result.detector_alarm==alarm
+    row=analysis_repo._execute('SELECT * FROM process_analysis')[0]
+    assert row['detector_score']==score and bool(row['detector_alarm'])==alarm
+    assert json.loads(row['details'])['cusum_s']==s
+
+
+def test_score_before_alarm_and_strict_hysteresis_boundaries():
+    a=ProcessAnalyzer(fast(sigma_min_mv=2))
+    for i in range(5): a.update(p(i))
+    r=a.update(p(5,t=85,mv=100+2*(4+.75)))
+    assert r.details.cusum_s==4 and r.detector_score==.5 and not r.detector_alarm
+    # Choose z to reach the boundary exactly after the unchanged leak/k formula.
+    r=a.update(p(6,t=85,mv=100+2*(8-.995*4+.75)))
+    assert r.details.cusum_s==pytest.approx(8) and r.detector_score==pytest.approx(1)
+    assert not r.detector_alarm
+    r=a.update(p(7,t=85,mv=100+2*(10-.995*8+.75)))
+    assert r.detector_alarm
+    r=a.update(p(8,t=85,mv=100+2*(3-.995*10+.75)))
+    assert r.details.cusum_s==pytest.approx(3)
+    assert r.detector_alarm
+    r=a.update(p(9,t=85,mv=100))
+    assert r.details.cusum_s<2.4 and not r.detector_alarm
+
+
+class ControlledHeadsFeatures:
+    """Unit-test fixture: supply feature values without changing their formulas."""
+    def __init__(self):
+        from disti.process_analysis.models import Features
+        self.value=Features(dtdt=0,trend_3m=-1,trend_5m=-1,trend_accel_3m=.1)
+    def reset(self):
+        pass
+    def update(self,point):
+        return self.value
+
+
+def heads_analyzer():
+    a=ProcessAnalyzer(fast())
+    for i in range(4): a.update(p(i))
+    features=ControlledHeadsFeatures()
+    a.features=features
+    return a,features
+
+
+def head_point(a,features,i,trend=-.08,trend5=-.08,accel=.1,dtdt=0,**input_changes):
+    features.value=replace(features.value,dtdt=dtdt,trend_3m=trend,trend_5m=trend5,trend_accel_3m=accel)
+    return a.update(p(i,**input_changes))
+
+
+def test_heads_plateau_gate_and_clear_negative_trend():
+    a=ProcessAnalyzer(fast());f=ControlledHeadsFeatures();a.features=f
+    for i in range(10):
+        assert head_point(a,f,i,trend=0,accel=.1,dtdt=2).process_state==S.AUFHEIZEN
+    assert a.plateau_time is None
+    for i in range(10,13): head_point(a,f,i,trend=-1)
+    assert a.plateau_time==p(12).time
+    for i in range(13,25):
+        assert head_point(a,f,i,trend=-1).process_state==S.VORLAUF
+
+
+def test_heads_two_stage_persistence_and_middle_latch():
+    a,f=heads_analyzer()
+    for i in range(4,7):
+        assert head_point(a,f,i).process_state==S.VORLAUF
+    assert head_point(a,f,7).process_state==S.VORLAUF_AUSKLANG
+    for i in range(8,14):
+        assert head_point(a,f,i,trend=0,trend5=0,accel=0).process_state==S.VORLAUF_AUSKLANG
+    assert head_point(a,f,14,trend=0,trend5=0,accel=0).process_state==S.MITTELLAUF
+    # A later negative trend or loss of plateau must not revoke MITTELLAUF.
+    assert head_point(a,f,15,trend=-1,trend5=-1,accel=-.1,dtdt=2).process_state==S.MITTELLAUF
+    assert head_point(a,f,16,t=70).process_state==S.ENDE
+    assert head_point(a,f,17).process_state==S.AUFHEIZEN
+    assert a.heads_state==S.VORLAUF and a.heads_middle_since is None
+
+
+def test_short_acceleration_spike_and_strict_exit_thresholds():
+    a,f=heads_analyzer()
+    assert head_point(a,f,4).process_state==S.VORLAUF
+    assert head_point(a,f,5).process_state==S.VORLAUF
+    assert head_point(a,f,6,accel=0).process_state==S.VORLAUF
+    assert a.heads_exit_since is None
+    for i in range(7,12):
+        assert head_point(a,f,i,trend=-.10).process_state==S.VORLAUF
+    for i in range(12,15):
+        assert head_point(a,f,i).process_state==S.VORLAUF
+    assert head_point(a,f,15).process_state==S.VORLAUF_AUSKLANG
+
+
+def test_heads_exit_falls_back_and_restarts_persistence():
+    a,f=heads_analyzer()
+    for i in range(4,8): head_point(a,f,i)
+    assert head_point(a,f,8,trend=0,trend5=0).process_state==S.VORLAUF_AUSKLANG
+    assert head_point(a,f,9,trend=-.2).process_state==S.VORLAUF
+    assert a.heads_middle_since is None
+    for i in range(10,13):
+        assert head_point(a,f,i).process_state==S.VORLAUF
+    assert head_point(a,f,13).process_state==S.VORLAUF_AUSKLANG
+
+
+@pytest.mark.parametrize('interruption',['missing','invalid','gap','plateau'])
+def test_heads_exit_persistence_is_interrupted(interruption):
+    a,f=heads_analyzer()
+    head_point(a,f,4);head_point(a,f,5)
+    if interruption=='missing': head_point(a,f,6,mv=None)
+    elif interruption=='invalid': head_point(a,f,6,invalid=True)
+    elif interruption=='gap': head_point(a,f,7)
+    else: head_point(a,f,6,dtdt=2)
+    start=8 if interruption=='gap' else 7
+    for i in range(start,start+3):
+        assert head_point(a,f,i).process_state==S.VORLAUF
+    assert head_point(a,f,start+3).process_state==S.VORLAUF_AUSKLANG
+
+
+@pytest.mark.parametrize('interruption',['missing','invalid','gap','plateau','trend3','trend5','unknown'])
+def test_middle_needs_both_trends_plateau_and_unbroken_persistence(interruption):
+    a,f=heads_analyzer()
+    for i in range(4,8): head_point(a,f,i)
+    for i in range(8,11): head_point(a,f,i,trend=0,trend5=0)
+    changes={'trend':0,'trend5':0}
+    if interruption=='missing': changes['mv']=None
+    elif interruption=='invalid': changes['invalid']=True
+    elif interruption=='plateau': changes['dtdt']=2
+    elif interruption=='trend3': changes['trend']=-.08
+    elif interruption=='trend5': changes['trend5']=-.08
+    elif interruption=='unknown': changes['trend5']=None
+    index=12 if interruption=='gap' else 11
+    head_point(a,f,index,**changes)
+    for i in range(index+1,index+7):
+        assert head_point(a,f,i,trend=-.05,trend5=-.05).process_state==S.VORLAUF_AUSKLANG
+    assert head_point(a,f,index+7,trend=-.05,trend5=-.05).process_state==S.MITTELLAUF
+
+
+def test_middle_is_overridden_by_tail_and_end_and_reset_clears_heads():
+    a,f=heads_analyzer()
+    for i in range(4,8): head_point(a,f,i)
+    for i in range(8,15): head_point(a,f,i,trend=0,trend5=0)
+    assert a.heads_state==S.MITTELLAUF
+    assert head_point(a,f,15,t=85,mv=130).process_state==S.NACHLAUF_ENTWICKELT
+    assert head_point(a,f,16,t=86,mv=130).process_state==S.NACHLAUF_WAHRSCHEINLICH
+    assert head_point(a,f,17,t=70).process_state==S.ENDE
+    a.reset()
+    assert a.heads_state==S.VORLAUF and a.heads_exit_since is None and a.heads_middle_since is None
+
+
+def test_heads_actual_features_live_and_rebuild_identical(analysis_repo):
+    from disti.hardware.base import SensorReading
+    for sensor in ('vapor-temp','ec-1','ec-temp'):
+        analysis_repo.ensure_sensor(sensor,sensor,'test')
+    for i in range(150):
+        mv=100+20*math.exp(-(i/3)/3)
+        for sensor,value,raw in [('vapor-temp',82,None),('ec-1',1,mv),('ec-temp',40,1000)]:
+            analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',
+                value,'test',timestamp=p(i).time,raw_mv=raw))
+    before=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
+    service=AnalysisService(analysis_repo);a=ProcessAnalyzer()
+    live=[service.process_completed_bucket(a,p(i).time) for i in range(150)]
+    transitions=[r.process_state for i,r in enumerate(live) if i==0 or r.process_state!=live[i-1].process_state]
+    assert transitions==[S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
+    rows=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
+    assert service.rebuild(T,p(150).time)['points_written']==150
+    assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==rows
+    assert service.rebuild(p(100).time,p(150).time)['points_written']==50
+    assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==rows
+    assert analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')==before
+
+
+def test_alarm_off_boundary_is_strict_with_exactly_representable_values():
+    # h=10 gives alarm_off=3, so the strict equality check avoids rounding at
+    # the default decimal 2.4. The default values are covered above.
+    a=ProcessAnalyzer(fast(cusum_h=10,cusum_leak=1,sigma_min_mv=2))
+    for i in range(5): a.update(p(i))
+    a.s,a.alarm=4,True
+    r=a.update(p(5,t=85,mv=99.5))
+    assert r.details.cusum_s==a.config.cusum_alarm_off==3 and r.detector_alarm
+    assert not a.update(p(6,t=85,mv=100)).detector_alarm
