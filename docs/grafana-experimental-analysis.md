@@ -121,44 +121,50 @@ keinen Einfluss auf den Analyzer.
    und anschließender Rückkehr auf >= 75 °C freigegeben. Ein explizites
    reset() setzt den Analyzer zurück.
 
-Nach dem bestehenden Plateau beginnt VORLAUF. Die experimentelle Vorlauf-
-Auswertung verwendet den EC-Verlauf relativ zum bestätigten Plateau-Eintritt:
+Die angezeigte Vorlauf-/Mittellauf-Phase entsteht ausschließlich aus dT/dt.
+Die vorhandene Plateau-Erkennung für CUSUM-Baseline und EC-Referenz bleibt
+unverändert und ist unabhängig von der neuen Anzeigeentscheidung. Ebenso
+bleiben bestehende Prozessstart-/Endegrenzen und Nachlauf-Temperatur-Gates
+unverändert. Die Vorlauf-Übergänge selbst verwenden keine absolute Temperatur.
 
-- `ec_plateau_ref`: vorhandenes `raw_mv_1m` am Bucket der Plateau-Bestätigung,
-  also das geglättete 1-min-EC-Niveau, keine Einzelmessung und kein zukünftiger
-  Mittelwert. Die Referenz bleibt für diesen Prozess konstant.
-- `ec_drop_from_plateau = ec_plateau_ref - raw_mv_1m(t)`; positive Werte
-  bedeuten einen Abfall gegenüber dem Plateau-Niveau.
-- `ec_min_since_plateau`: kleinstes beobachtetes `raw_mv_1m` seit dem
-  Plateau-Eintritt, kein rollendes 5-min-Minimum.
-- `ec_recovery_from_min = raw_mv_1m(t) - ec_min_since_plateau`.
+1. AUFHEIZEN: Erst ein beobachtetes `dT/dt >= 1.0` °C/min gibt die nachfolgenden
+   Übergänge frei. Ein heiß gestarteter, konstanter Verlauf ohne Aufheizen
+   erhält keine automatische VORLAUF-Anzeige, auch wenn die CUSUM-Baseline
+   bereits ein Plateau erkannt hat.
+2. VORLAUF: nach dieser Aufheizphase `dT/dt <= 0.30` für mindestens 40 s.
+   Nicht passende Werte, Lücken oder Sensorfehler unterbrechen die Persistenz.
+3. VORLAUF_AUSKLANG: vollständig aufgewärmtes, kausales 120-s-Fenster
+   `(t-120 s, t]` mit `median(abs(dT/dt)) <= 0.12` °C/min und mindestens
+   80 % der Werte `abs(dT/dt) <= 0.20` °C/min. Keine Interpolation. Bei
+   20-s-Buckets sind das sechs Werte; ein einzelner Ausreißer ist möglich.
+4. MITTELLAUF: dieselbe stabile Fensterbedingung muss nach VORLAUF_AUSKLANG
+   noch mindestens 90 s bestätigt werden. Eine unstabile Fensterphase
+   unterbricht die Bestätigung; anschließend beginnt sie neu. Mit 20-s-
+   Buckets erfolgt eine ununterbrochene Bestätigung beim ersten verfügbaren
+   Punkt nach 90 s, also nach 100 s. MITTELLAUF bleibt verriegelt.
 
-Vor dem Plateau sowie bei ungültigen/fehlenden Buckets sind die neuen Features
-NULL. Datenlücken setzen die bisherigen Glättungsfenster und die Übergangs-
-Persistenz zurück, erhalten aber das zuvor gültig beobachtete Plateau-Niveau
-und Minimum. ENDE, neuer Prozess und reset() löschen beides. Die zentrale
-Feature-Berechnung ergänzt diese Diagnosewerte, der Analyzer hält die beiden
-prozessbezogenen Referenzwerte. Rohdaten und Trendformeln bleiben unverändert.
+Datenlücken und ungültige Sensorwerte leeren das dT/dt-Fenster und die Timer;
+die vorher beobachtete Aufheizphase bleibt bekannt. Die schon erreichte Stufe
+bleibt erhalten, wird während der Lücke aber durch den bestehenden Datenstatus
+überlagert. Neuer Prozess, ENDE und reset() löschen Vorlauf-State und Historie.
+Nachlauf und ENDE haben wie bisher Vorrang. Keine Referenzzeiten und keine
+EC-, Trend- oder Recovery-Bedingung für die Übergänge.
 
-- VORLAUF → VORLAUF_AUSKLANG: `ec_drop_from_plateau >= 1.0` mV bei gültigem
-  bestehendem Plateau, mindestens 40 s kontinuierlich.
-- VORLAUF_AUSKLANG → MITTELLAUF: anschließend `ec_drop_from_plateau >= 2.0` mV
-  und `ec_recovery_from_min >= 0.4` mV, bei gültigem Plateau mindestens 40 s.
-- Beide erreichten Stufen sind verriegelt, damit Gegenbewegungen kein Flackern
-  verursachen. Nachlauf- und Endeentscheidungen haben weiterhin Vorrang.
-- Lücken, Sensorfehler, verlorenes Plateau oder nicht erfüllte Kriterien
-  unterbrechen die betreffende Persistenz. Der erste MITTELLAUF-Persistenzpunkt
-  liegt nach Erreichen von VORLAUF_AUSKLANG. Keine feste Zeit nach Plateau.
+Zentrale Werte in config.py:
+`heating_detect_dtdt_min=1.0`, `vorlauf_start_dtdt_max=0.30`,
+`vorlauf_start_persistence_seconds=40`, `vorlauf_ausklang_window_seconds=120`,
+`vorlauf_ausklang_median_abs_dtdt_max=0.12`,
+`vorlauf_ausklang_bucket_abs_dtdt_max=0.20`,
+`vorlauf_ausklang_required_fraction=0.80`, `vorlauf_middle_confirm_seconds=90`.
+Die vorherigen EC-Vorlauf-Entscheidungsparameter wurden entfernt.
 
-Die alten Trend-/Acceleration-Bedingungen für den Vorlauf wurden ersetzt.
-Trends, trend_accel, dT/dt und rise_from_min bleiben diagnostisch sichtbar;
-keine zusätzliche Trendbedingung oder feste Temperatur für die EC-Übergänge.
-Die bestehende Plateau-Erkennung selbst bleibt unverändert.
-
-Zentrale Startwerte in config.py:
-`vorlauf_ausklang_drop_mv=1.0`, `vorlauf_ausklang_persistence_seconds=40`,
-`vorlauf_middle_drop_mv=2.0`, `vorlauf_middle_recovery_mv=0.4`,
-`vorlauf_middle_persistence_seconds=40`.
+Alle vorhandenen EC-Features werden unverändert berechnet und gespeichert.
+Die Plateau-Referenz ist weiterhin `raw_mv_1m` am bestätigten Baseline-Plateau-
+Eintritt, konstant für den Prozess. `ec_drop_from_plateau` ist Referenz minus
+aktuelles 1-min-Mittel, `ec_min_since_plateau` das kleinste 1-min-Mittel seit
+Plateau und `ec_recovery_from_min` der Abstand zu diesem Minimum. Vor diesem
+Plateau und in ungültigen Buckets NULL. Lücken erhalten Referenz/Minimum,
+ENDE und neuer Prozess löschen beides. Diese Größen sind nur diagnostisch.
 
 ## E. Parameter und Fensterspezifikation
 
@@ -276,8 +282,9 @@ bleibt erhalten. Alle neuen Panelabfragen lesen ausschließlich `process_analysi
   strikt S>h. Schwellen 4/8 gelten für CUSUM S auf der rechten Achse.
 - Vergleichsmarker: zusätzlich Plateau-Referenz, Minimum seit Plateau,
   EC-Abfall und Recovery sowie dT/dt; die bisherigen Trends, trend_accel und
-  rise_from_min bleiben erhalten. Sichtbare EC-Abfall-Schwellen 1/2 mV und
-  Recovery-Schwelle 0.4 mV. Alle Werte werden aus process_analysis gelesen;
+  rise_from_min bleiben erhalten. Kesseldampf und EC raw bleiben sichtbar.
+  Die früheren EC-Entscheidungsschwellen wurden aus der Darstellung entfernt;
+  Beschreibung und Dokumentation erläutern die dT/dt-Fensterkriterien. Alle Werte werden aus process_analysis gelesen;
   keine Feature- oder Zustandsberechnung in Grafana.
 - Temperatur: vapor_temp sowie dT/dt auf rechter Achse.
 - Prozessstatus: State timeline mit stabilen Enum-Werten/Farben.
@@ -310,21 +317,22 @@ Zusätzliche Trend-Dynamiktests prüfen konstantes Signal, linearen Anstieg,
 beschleunigten Anstieg, Erholung eines negativen Trends, exakte Warmup-Grenzen,
 Lücken, Kausalität, reguläre Persistenzspalten, historische/Live-Übereinstimmung
 und die Unabhängigkeit von CUSUM/Alarm gegenüber Trendfeatures. Vorlauf-
-Entscheidungen verwenden nun EC-Abstand und Recovery, nicht Trendfeatures.
+Entscheidungen verwenden ausschließlich dT/dt-Dynamik; EC und Trendfeatures
+bleiben diagnostisch.
 
 Zusätzliche zeitbasierte Tests prüfen historische NULL-Run-Messungen vom
 09.10.2026, automatisches Warmup, keine Persistenz außerhalb des Speicherfensters,
 gezieltes Ersetzen einschließlich leerer Bereiche, Erhalt anderer Versionen,
 Transaktions-Rollback und mehrere getrennte Brände mit Live-/Replay-Gleichheit.
 Auch ein Teil-Rebuild nach über 30 Minuten übernimmt die ursprüngliche Baseline.
-Neue Plateau-EC-Tests prüfen NULL vor Plateau, Referenz aus geglättetem EC,
-kausales Prozessminimum, Drop-/Recovery-Schwellen, Persistenz, kurze Drop-/
-Recovery-Spikes, Recovery ohne ausreichenden Drop, Zustandsverriegelung,
-Lücken/Sensorfehler/Plateau-Verlust, sauberen Reset sowie identische reguläre
-Spalten und Zustandswechsel live und im vollständigen/Teil-Rebuild.
-Nachlauftests bestätigen weiterhin h=8, abgeleitete Hysterese und graduellen
-Score unabhängig vom Alarm. Ein Vergleich mit deaktivierten Vorlauf-Übergängen
-bestätigt identische CUSUM-Diagnosen, Scores und Nachlaufentscheidungen.
+Temperaturdynamik-Tests prüfen vorherige Aufheizphase, persistenten Einbruch,
+vollständiges Near-zero-Fenster, Median und Anteil als getrennte Bedingungen,
+Ausreißertoleranz, weitere Bestätigung und deren Unterbrechung, Datenlücken,
+MITTELLAUF-Verriegelung sowie gleiche Zustandsfolgen bei Plateau-Niveaus von
+79/82/84 °C. EC, Trends und Recovery blockieren die Übergänge nicht.
+Live und vollständiger/Teil-Rebuild speichern dieselben Zustände und EC-
+Diagnosen; Rohdaten bleiben unverändert. CUSUM-Diagnosen und Scores sind trotz
+unterschiedlicher Vorlauf-Freigabe identisch; h=8 und Hysterese bleiben erhalten.
 
 Die vollständige Suite umfasst Backend- und Watchdogtests; das aktuelle Ergebnis
 ist im Abschlussbericht dokumentiert. Ein gerendertes Grafana-UI und die echte
@@ -394,7 +402,8 @@ wiederherstellen; update darf für denselben Zeitstempel nicht doppelt laufen.
   erzeugt. Das ist konservativ und in details erkennbar.
 - Keine Interpolation, keine Warmup-Samples während Lücken. Lange Lücken führen
   weder zu erfundenem Verlauf noch automatisch zum Ende.
-- Optionales Vorlauf-Ausklang/Mittellauf-Mapping wartet auf echte Validierung.
+- Die experimentelle Vorlauf-/Mittellauf-Anzeige benötigt noch Validierung
+  mit den beiden historischen Rohdatenverläufen.
 - Dashboard-SQL wurde strukturell und zusätzlich soweit möglich gegen PostgreSQL
   geprüft; ein gerendertes Grafana-UI und echte TimescaleDB-Laufzeit sind getrennte
   Integrationsprüfungen.

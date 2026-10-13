@@ -1,5 +1,7 @@
 """Database-free incremental process interpretation. One result per input."""
 import math
+from collections import deque
+from statistics import median
 from .config import AnalysisConfig
 from .features import FeatureCalculator
 from .models import AnalysisInput, AnalysisResult, Features, DetectorDetails
@@ -45,41 +47,60 @@ class ProcessAnalyzer:
         self._reset_heads()
 
     def _reset_heads(self):
-        self.heads_state = State.VORLAUF
+        self.heads_state = State.AUFHEIZEN
+        self.heating_seen = False
         self.ec_plateau_ref = self.ec_min_since_plateau = None
-        self.heads_exit_since = self.heads_middle_since = None
+        self.heads_dtdt = deque()
+        self._break_heads_persistence()
 
-    def _heads_state(self, time, features, plateau):
+    def _break_heads_persistence(self):
+        self.heads_start_since = self.heads_middle_since = None
+        self.heads_contiguous_start = None
+        self.heads_dtdt.clear()
+
+    def _heads_state(self, time, features):
+        """Temperature dynamics only; baseline plateau/CUSUM stay independent."""
         c = self.config
         if self.heads_state == State.MITTELLAUF:
             return self.heads_state
-        if not plateau:
-            self.heads_exit_since = self.heads_middle_since = None
+        slope = features.dtdt
+        if slope is None:
+            self._break_heads_persistence()
             return self.heads_state
+        if self.heads_contiguous_start is None:
+            self.heads_contiguous_start = time
+        self.heads_dtdt.append((time, abs(slope)))
+        while (time-self.heads_dtdt[0][0]).total_seconds() >= c.vorlauf_ausklang_window_seconds:
+            self.heads_dtdt.popleft()
+        if slope >= c.heating_detect_dtdt_min:
+            self.heating_seen = True
+        if self.heads_state == State.AUFHEIZEN:
+            if not self.heating_seen or slope > c.vorlauf_start_dtdt_max:
+                self.heads_start_since = None
+            else:
+                if self.heads_start_since is None:
+                    self.heads_start_since = time
+                if (time-self.heads_start_since).total_seconds() >= c.vorlauf_start_persistence_seconds:
+                    self.heads_state = State.VORLAUF
+                    self.heads_start_since = None
+            return self.heads_state
+        values = [value for _, value in self.heads_dtdt]
+        stable = ((time-self.heads_contiguous_start).total_seconds() >= c.vorlauf_ausklang_window_seconds and
+                  median(values) <= c.vorlauf_ausklang_median_abs_dtdt_max and
+                  sum(value <= c.vorlauf_ausklang_bucket_abs_dtdt_max for value in values)/len(values)
+                  >= c.vorlauf_ausklang_required_fraction)
         if self.heads_state == State.VORLAUF:
-            exiting = (features.ec_drop_from_plateau is not None and
-                       features.ec_drop_from_plateau >= c.vorlauf_ausklang_drop_mv)
-            if not exiting:
-                self.heads_exit_since = None
-            else:
-                if self.heads_exit_since is None:
-                    self.heads_exit_since = time
-                if (time-self.heads_exit_since).total_seconds() >= c.vorlauf_ausklang_persistence_seconds:
-                    self.heads_state = State.VORLAUF_AUSKLANG
-                    self.heads_exit_since = None
+            if stable:
+                self.heads_state = State.VORLAUF_AUSKLANG
+                self.heads_middle_since = time
+        elif not stable:
+            self.heads_middle_since = None
         else:
-            stable = (features.ec_drop_from_plateau is not None and
-                      features.ec_recovery_from_min is not None and
-                      features.ec_drop_from_plateau >= c.vorlauf_middle_drop_mv and
-                      features.ec_recovery_from_min >= c.vorlauf_middle_recovery_mv)
-            if not stable:
+            if self.heads_middle_since is None:
+                self.heads_middle_since = time
+            if (time-self.heads_middle_since).total_seconds() >= c.vorlauf_middle_confirm_seconds:
+                self.heads_state = State.MITTELLAUF
                 self.heads_middle_since = None
-            else:
-                if self.heads_middle_since is None:
-                    self.heads_middle_since = time
-                if (time-self.heads_middle_since).total_seconds() >= c.vorlauf_middle_persistence_seconds:
-                    self.heads_state = State.MITTELLAUF
-                    self.heads_middle_since = None
         return self.heads_state
 
     def update(self, point: AnalysisInput) -> AnalysisResult:
@@ -97,13 +118,13 @@ class ProcessAnalyzer:
         invalid |= point.raw_mv is not None and point.raw_mv > c.ec_max_mv
         invalid |= point.pt_raw_mv is not None and abs(point.pt_raw_mv-c.pt_disconnect_mv) <= c.pt_disconnect_tolerance_mv
         if gap or missing:
-            self.heads_exit_since = self.heads_middle_since = None
+            self._break_heads_persistence()
             self.features.reset()
             self.plateau_count = 0
             self.invalid_since = None
             state = State.ENDE if self.ended else State.DATENLUECKE
         elif invalid:
-            self.heads_exit_since = self.heads_middle_since = None
+            self._break_heads_persistence()
             self.features.reset()
             self.plateau_count = 0
             if self.invalid_since is None:
@@ -135,7 +156,7 @@ class ProcessAnalyzer:
                 if self.plateau_time is not None:
                     f = FeatureCalculator.relative_to_plateau(f, self.ec_plateau_ref, self.ec_min_since_plateau)
                     self.ec_plateau_ref, self.ec_min_since_plateau = f.ec_plateau_ref, f.ec_min_since_plateau
-                state = self._heads_state(point.time, f, plateau) if self.plateau_time else State.AUFHEIZEN
+                state = self._heads_state(point.time, f)
                 if t >= c.baseline_freeze_temperature:
                     self.baseline_frozen = True
                 ready_time = self.plateau_time is not None and (point.time-self.plateau_time).total_seconds() >= c.baseline_delay_seconds

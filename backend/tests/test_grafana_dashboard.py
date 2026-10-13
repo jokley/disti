@@ -61,14 +61,14 @@ def test_gradual_score_display_and_process_state_mappings():
         assert mappings[state]['text']==state
 
 
-def test_plateau_ec_diagnostics_are_persisted_fields_with_visible_thresholds():
+def test_temperature_and_ec_diagnostics_use_persisted_fields():
     panel=next(p for p in dashboard()['panels'] if p['id']==22)
     sql=panel['targets'][0]['rawSql']
-    for field in ('ec_plateau_ref','ec_drop_from_plateau','ec_min_since_plateau','ec_recovery_from_min','trend_1m','trend_3m','dtdt'):
+    for field in ('ec_plateau_ref','ec_drop_from_plateau','ec_min_since_plateau','ec_recovery_from_min','trend_1m','trend_3m','dtdt','vapor_temp','raw_mv'):
         assert field in sql
     assert ' - ' not in sql and 'lag(' not in sql.lower()
-    for name,expected in [('EC-Abfall vom Plateau (mV)',[None,1,2]),('EC-Erholung vom Minimum (mV)',[None,.4])]:
+    for name in ('EC-Abfall vom Plateau (mV)','EC-Erholung vom Minimum (mV)'):
         override=next(o for o in panel['fieldConfig']['overrides'] if o['matcher']['options']==name)
-        props={p['id']:p['value'] for p in override['properties']}
-        assert [s['value'] for s in props['thresholds']['steps']]==expected
-        assert props['custom.thresholdsStyle']['mode']=='line'
+        assert all(p['id']!='thresholds' for p in override['properties'])
+    assert 'EC, Trends und Recovery sind nur diagnostisch' in panel['description']
+    assert '120-s-Fenster' in panel['description']
