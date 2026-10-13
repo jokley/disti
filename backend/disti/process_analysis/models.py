@@ -22,6 +22,10 @@ class Features:
     trend_5m: float | None = None
     trend_accel_3m: float | None = None
     trend_accel_5m: float | None = None
+    ec_plateau_ref: float | None = None
+    ec_drop_from_plateau: float | None = None
+    ec_min_since_plateau: float | None = None
+    ec_recovery_from_min: float | None = None
 
 @dataclass(frozen=True)
 class DetectorDetails:

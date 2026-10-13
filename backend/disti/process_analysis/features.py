@@ -1,5 +1,6 @@
 """Causal time windows and smoothed diagnostic trend dynamics."""
 from collections import deque
+from dataclasses import replace
 from datetime import timedelta
 from statistics import fmean
 from .models import AnalysisInput, Features
@@ -25,6 +26,23 @@ class FeatureCalculator:
         mt, mv = fmean(times), fmean(values)
         denominator = sum((t - mt)**2 for t in times)
         return sum((t - mt)*(v - mv) for t, v in zip(times, values)) / denominator if denominator else None
+
+    @staticmethod
+    def relative_to_plateau(features, reference, minimum):
+        """Causal diagnostics from the existing 1-minute EC mean.
+
+        The analyzer owns the process-lifetime reference/minimum, so a data gap
+        resets smoothing windows without discarding the observed plateau level.
+        """
+        current = features.raw_mv_1m
+        if current is None:
+            return features
+        reference = current if reference is None else reference
+        minimum = current if minimum is None else min(minimum, current)
+        return replace(features, ec_plateau_ref=reference,
+                       ec_drop_from_plateau=reference-current,
+                       ec_min_since_plateau=minimum,
+                       ec_recovery_from_min=current-minimum)
 
     def update(self, point: AnalysisInput) -> Features:
         if self.points and (point.time-self.points[-1].time).total_seconds() != self.config.bucket_seconds:

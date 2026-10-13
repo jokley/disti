@@ -739,7 +739,7 @@
         "type": "postgres",
         "uid": "P44368ADAD746BC27"
       },
-      "description": "Persistierte EC-Trends und Trendänderungen zur Diagnose des Vorlauf-Übergangs; rise_from_min_5m bleibt diagnostisch.",
+      "description": "Vorlauf-Diagnose aus gespeicherten Werten. VORLAUF_AUSKLANG: EC-Abfall ≥1,0 mV für 40 s. MITTELLAUF: anschließend EC-Abfall ≥2,0 mV und EC-Erholung ≥0,4 mV für 40 s, bei gültigem Plateau. Trends und dT/dt bleiben diagnostisch; keine feste Referenzzeit.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -821,6 +821,94 @@
                 "value": "right"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EC-Abfall vom Plateau (mV)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:mV"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 2
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.thresholdsStyle",
+                "value": {
+                  "mode": "line"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EC-Erholung vom Minimum (mV)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:mV"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.4
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.thresholdsStyle",
+                "value": {
+                  "mode": "line"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dT/dt (°C/min)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:°C/min"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
           }
         ]
       },
@@ -853,7 +941,7 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT time, rise_from_min_5m AS \"Anstieg vom Minimum (mV)\", trend_1m AS \"Trend 1 min (mV/min)\", trend_3m AS \"Trend 3 min (mV/min)\", trend_5m AS \"Trend 5 min (mV/min)\", trend_accel_3m AS \"Trendänderung 3 min (mV/min²)\", trend_accel_5m AS \"Trendänderung 5 min (mV/min²)\" FROM process_analysis WHERE $__timeFilter(time) AND detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time;",
+          "rawSql": "SELECT time, ec_plateau_ref AS \"EC Plateau-Referenz (mV)\", ec_min_since_plateau AS \"EC Minimum seit Plateau (mV)\", ec_drop_from_plateau AS \"EC-Abfall vom Plateau (mV)\", ec_recovery_from_min AS \"EC-Erholung vom Minimum (mV)\", dtdt AS \"dT/dt (°C/min)\", rise_from_min_5m AS \"Anstieg vom Minimum (mV)\", trend_1m AS \"Trend 1 min (mV/min)\", trend_3m AS \"Trend 3 min (mV/min)\", trend_5m AS \"Trend 5 min (mV/min)\", trend_accel_3m AS \"Trendänderung 3 min (mV/min²)\", trend_accel_5m AS \"Trendänderung 5 min (mV/min²)\" FROM process_analysis WHERE $__timeFilter(time) AND detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time;",
           "refId": "A"
         }
       ],
