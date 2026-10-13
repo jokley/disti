@@ -42,7 +42,7 @@ def test_compose_uses_portable_multi_arch_images():
     assert "context: ./mosquitto" in BASE_COMPOSE
     assert "image: timescale/timescaledb:latest-pg15" in BASE_COMPOSE
     assert "image: grafana/grafana:13.2.1" in BASE_COMPOSE
-    assert BASE_COMPOSE.count("image: disti-backend") == 2
+    assert BASE_COMPOSE.count("image: disti-backend") == 3
 
 
 def test_documented_migration_rebuilds_and_uses_running_backend():
@@ -105,6 +105,7 @@ def test_example_environment_is_safe_and_local_environment_is_ignored():
         "MQTT_PASSWORD": "change-me",
         "DISTI_HARDWARE_MODE": "mock",
         "DISTI_POLL_INTERVAL_SECONDS": "2",
+        "DISTI_ANALYSIS_POLL_SECONDS": "2",
         "DISTI_HARDWARE_HEALTH_PORT": "8081",
         "DISTI_HARDWARE_HEALTH_URL": "http://hardware-agent:8081",
         "DISTI_HARDWARE_MAX_AGE_SEC": "30",
@@ -319,13 +320,13 @@ def test_raspberry_device_access_is_hardware_agent_only():
     service_matches = re.findall(r"^  ([\w-]+):\n(.*?)(?=^  \S|\Z)", service_config,
                                  flags=re.MULTILINE | re.DOTALL)
     services = dict(service_matches)
-    expected = {"api", "hardware-agent", "postgres", "mqtt", "watchdog", "grafana", "nginx"}
+    expected = {"api", "hardware-agent", "analysis-worker", "postgres", "mqtt", "watchdog", "grafana", "nginx"}
 
     assert set(services) == expected
     assert {re.search(r"^    container_name: (.+)$", config, re.MULTILINE).group(1)
             for config in services.values()} == {
         "disti-api", "disti-hardware-agent", "disti-postgres", "disti-mqtt",
-        "disti-watchdog", "disti-grafana", "disti-nginx",
+        "disti-watchdog", "disti-grafana", "disti-nginx", "disti-analysis-worker",
     }
     hardware_agent = services["hardware-agent"]
     assert "DISTI_HARDWARE_MODE: raspberry" in hardware_agent
@@ -357,3 +358,13 @@ def test_runtime_structure_and_grafana_have_no_removed_legacy_dependencies():
     assert "timescaledb: true" in GRAFANA_DATASOURCE
     assert (ROOT / "backend/entrypoints/api.py").exists()
     assert (ROOT / "backend/entrypoints/hardware_agent.py").exists()
+
+
+def test_analysis_worker_is_one_independent_backend_process():
+    worker = re.search(r"^  analysis-worker:\n(.*?)(?=^  \S|\Z)", BASE_COMPOSE,
+                       re.MULTILINE | re.DOTALL).group(1)
+    assert 'image: disti-backend' in worker
+    assert 'entrypoints.analysis_worker' in worker
+    assert 'restart: unless-stopped' in worker
+    assert 'disti.env' in worker
+    assert 'devices:' not in worker and 'ports:' not in worker

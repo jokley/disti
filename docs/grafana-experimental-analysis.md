@@ -21,7 +21,8 @@ backend/disti/process_analysis/
 ├── features.py   kausale Zeitfenster und lineare Trends
 ├── states.py     stabile ProcessState-Enum
 ├── analyzer.py   ProcessAnalyzer.reset()/update(), ohne externe Infrastruktur
-└── service.py    Rebuild-Orchestrierung und einzelner Live-Persistenzaufruf
+├── service.py    Rebuild-Orchestrierung und einzelner Live-Persistenzaufruf
+└── worker.py     kontinuierlicher einzelner Live-Consumer
 ```
 
 Repository: nur Rohdatenaggregation und Persistenz. Flask: nur Requestvalidierung
@@ -70,8 +71,10 @@ docker compose exec api python -m entrypoints.migrate
 Die vorhandene Migration-Entrypoint-Konvention wird verwendet. Anschließend
 Grafana das aktualisierte provisionierte Dashboard laden lassen. In dieser
 Arbeitsumgebung wurde kein bestehender DISTI-Stack migriert oder neu gestartet.
-Ein automatischer Live-Worker wird mit dieser Änderung noch nicht gestartet;
-Dashboard-Daten entstehen zunächst durch Rebuild-Aufrufe.
+Der Compose-Service `analysis-worker` aktiviert die kontinuierliche Analyse beim
+nächsten Start des aktualisierten Stacks. Er verwendet dasselbe Backend-Image
+mit eigenem Entrypoint; weder Gunicorn-Worker noch Hardware-Prozess starten
+zusätzliche Analyseschleifen. Keine produktive Bereitstellung in dieser Sitzung.
 
 ## D. Analyzer-State und Berechnungsreihenfolge
 
@@ -269,33 +272,37 @@ Zeitraum/Detector/Version durch den Betreiber serialisieren.
 Direkter API-Zugang: Port 5000; hinter dem vorhandenen Nginx-Prefix:
 `/backend/api/analysis/rebuild`.
 
-## G. Grafana
+## G. Grafana: Betriebsansicht
 
-Filter: Grafana-Zeitfenster, Detector, Algorithmusversion. Der bestehende Dashboard-UID
-bleibt erhalten. Alle neuen Panelabfragen lesen ausschließlich `process_analysis`.
+Die Dashboard-UID und Detector-/Versionsfilter bleiben erhalten. Die Live-Ansicht
+verwendet den Zeitraum bis `now` und weiterhin 10 s Refresh. Beim historischen
+Zoom zeigen Status und Kernwerte den letzten Analysepunkt im gewählten Zeitraum.
 
-- EC Prozesssignal: raw_mv, 1-/5-min-Mittel und CUSUM-Baseline aus details.
-- Nachlauf-Detector: Nachlauf-Score 0–100, Alarm, CUSUM S, z.
-  Anzeige `50 * detector_score` ist keine Wahrscheinlichkeit: 0/25/50/75/100
-  entsprechen S/h = 0/0.5/1/1.5/≥2. Die technische Skala ist unabhängig vom
-  Boolean Alarm. Die sichtbare Schwelle 50 bedeutet S=h; Alarm EIN bleibt
-  strikt S>h. Schwellen 4/8 gelten für CUSUM S auf der rechten Achse.
-- Vergleichsmarker: zusätzlich Plateau-Referenz, Minimum seit Plateau,
-  EC-Abfall und Recovery sowie dT/dt; die bisherigen Trends, trend_accel und
-  rise_from_min bleiben erhalten. Kesseldampf und EC raw bleiben sichtbar.
-  Die früheren EC-Entscheidungsschwellen wurden aus der Darstellung entfernt;
-  Beschreibung und Dokumentation erläutern die dT/dt-Fensterkriterien. Alle Werte werden aus process_analysis gelesen;
-  keine Feature- oder Zustandsberechnung in Grafana.
-- Temperatur: vapor_temp sowie dT/dt auf rechter Achse.
-- Prozessstatus: State timeline mit stabilen Enum-Werten/Farben.
-- Analyse – letzter Wert: Kesseldampf, Score, Alarm und Status des letzten
-  Analysepunkts im gewählten Grafana-Zeitfenster.
+Hauptbereich, von oben nach unten:
 
-Die physikalischen Werte sind detectorunabhängig. Zusätzliche CUSUM-Diagnosen
-bleiben optionale JSON-Felder; bei anderen Detectoren ohne diese Schlüssel
-zeigen die betreffenden Reihen NULL. Historische Brände werden ausschließlich
-über Grafana-Zeitfenster verglichen. Ohne Rebuild/Live-Writer bleiben
-Analysepanels leer. Grafana-Refresh berechnet keine neuen Analysepunkte.
+- **Aktueller Prozessstatus**: große Stat mit sämtlichen bestehenden State-
+  Mappings, ausschließlich letzter gespeicherter process_state. Keine neue
+  State- oder transition_reason-Logik; keine Berechnung der State-Dauer.
+- **Prozessstatus**: kompakte Timeline aus gespeicherten Zuständen.
+- **Aktuelle Prozesswerte**: Kesseldampf, dT/dt, EC raw, Nachlauf-Score und Alarm
+  des letzten abgeschlossenen Analyse-Buckets. Kleine Kühler-Anzeige daneben;
+  der Kühler ist keine Entscheidungsgröße für den State.
+- **Temperatur – Prozessanalyse**, **EC Prozesssignal**, **Nachlauf-Detector**:
+  nur operative Kurven. Keine Glättungs-/Trend-/CUSUM-Interna im Hauptbereich.
+
+Die standardmäßig eingeklappte Row **Diagnose / Entwicklung** enthält:
+
+- **Vergleichsmarker**: alle bisherigen Plateau-EC-Features, Trends, trend_accel,
+  rise_from_min, dT/dt und Temperatur-/EC-Diagnosen bleiben sichtbar.
+- **EC Glättung / Baseline**: raw_mv_1m, raw_mv_5m und Baseline-Mittelwert.
+- **CUSUM Diagnose**: S, z, baseline_mu und baseline_sigma; bestehende
+  CUSUM-Schwellen 4/8 und Diagnoseeinheiten bleiben erhalten.
+
+Die Row **Rohdaten / Engineering** bewahrt die früheren Rohdaten-Gauges/-Kurven
+und Engineering-Panels. Keine bestehenden Analysefeatures wurden entfernt.
+Alle Analysepanels lesen process_analysis; Grafana berechnet weder Features
+noch States. `50 * detector_score` bleibt reine Anzeigeformatierung: 50 ist
+S=h und 100 ist S>=2h, keine Wahrscheinlichkeit. Die Anlage wird nicht gesteuert.
 
 ## H. Tests
 
@@ -356,40 +363,66 @@ geprüft werden; es wurde nicht auf sensorische Referenzzeiten gefittet. In der
 aktuellen Arbeitsumgebung ist die lokale PostgreSQL-Datenbank leer, daher sind
 keine historischen Zustandswechsel oder eine Plausibilitätsbewertung verfügbar.
 
-## J. Späterer Live-Aufruf
+## J. Kontinuierliche Live-Verarbeitung
+
+`docker-compose.yaml` startet genau einen `analysis-worker` mit
+`python -m entrypoints.analysis_worker` im vorhandenen disti-backend-Image.
+Er braucht nur Datenbankzugang, keinen Hardwarebus, keine API-Ports und keine
+Queue. Die Hardware erfasst unverändert Rohdaten; API und Gunicorn bleiben
+unverändert. Betriebsintervall: `DISTI_ANALYSIS_POLL_SECONDS=2` in disti.env,
+Standard ebenfalls 2 s. Compose startet den Prozess nach einem Abbruch neu.
+
+Start/Restart:
+
+1. Letzten gespeicherten Analysezeitpunkt für Detector/Version lesen.
+2. Einen neuen ProcessAnalyzer mit derselben Config wie der Rebuild erzeugen.
+3. Verfügbare relevante Rohdaten bis einschließlich dieses letzten Buckets
+   durch die bestehende Aggregation und update()-Logik abspielen, **ohne**
+   vorhandene Analysezeilen zu löschen oder neu zu schreiben. Vollständige
+   Vorgeschichte ist nötig, weil die eingefrorene Baseline/CUSUM nicht mit
+   einem festen Warmup-Fenster exakt wiederhergestellt werden kann.
+4. Nur fehlende Buckets nach diesem Zeitpunkt chronologisch nachholen; danach
+   jedes neu abgeschlossene UTC-20-s-Intervall verarbeiten. Ohne vorhandene
+   Analyse beim ersten relevanten Sensor-Bucket beginnen; ohne Rohdaten warten.
+
+Der Worker hält Analyzer und nächsten Bucket im Speicher. Im laufenden Betrieb
+ruft er für jeden abgeschlossenen Bucket genau einmal auf:
 
 ```python
-from disti.process_analysis import AnalysisConfig, AnalysisInput, ProcessAnalyzer
-from disti.process_analysis.service import AnalysisService
-
-config = AnalysisConfig()
-service = AnalysisService(repository, config)
-analyzer = ProcessAnalyzer(config)
-
-# Genau einmal pro abgeschlossenem Bucket, aufsteigend, einschließlich Lücken:
-result = service.save_completed_point(analyzer, AnalysisInput(
-    time=bucket_start_utc,
-    vapor_temp=avg_vapor_temp, raw_mv=avg_ec_raw_mv,
-    pt_raw_mv=avg_pt_raw_mv,
-    sensor_invalid=has_invalid_quality,
-))
+service.process_completed_bucket(analyzer, bucket_start_utc)
 ```
 
-Alternativ kann der Live-Caller die Aggregation direkt dem Service überlassen:
+Dafür wird nur dieser einzelne Bucket geladen. Auch leere Buckets werden mit
+dem bestehenden Datenlückenstatus gespeichert. Der aktuelle offene Bucket
+und Zukunftsdaten werden nicht ausgewertet. Bestehende Upserts mit
+`(time, detector_name, algo_version)` verhindern doppelte Datensätze. Es gibt
+keinen zweiten State-Store oder Analyzer-Checkpoint und keinen vollständigen
+DB-Rebuild beim Start; die alte Vorgeschichte wird nur im Speicher aufgewärmt.
 
-```python
-result = service.process_completed_bucket(analyzer, bucket_start_utc)
+Bei einem temporären DB-Fehler loggt der Loop die Exception und wartet bis zum
+nächsten Zyklus. Der Analyzer wird verworfen, weil update() vor dem fehlgeschlagenen
+Save bereits gelaufen sein kann. Beim Retry wird er vom letzten tatsächlich
+persistierten Punkt wiederhergestellt. Auch eine verlorene Bestätigung eines
+bereits committed Saves verursacht keine Duplikate. Ungültige Sensorwerte
+laufen durch die vorhandene Analyzer-Logik. SIGTERM/SIGINT stoppen die Schleife.
+
+Verzögerung nach Bucket-Ende: normalerweise 0–2 s bis zur Persistenz; zusätzlich
+bis zu 10 s Grafana-Refresh. Vom einzelnen Messwert aus kommt die restliche
+Bucket-Dauer (bis zu 20 s) hinzu. Die Start-Aufwärmzeit hängt von der vorhandenen
+Historie ab. Überlappende manuelle Rebuilds mit dem Worker serialisieren:
+
+```sh
+docker compose stop analysis-worker
+# vorhandenen zeitbasierten Rebuild ausführen
+docker compose up -d analysis-worker
 ```
 
-Dieser Aufruf liest über `repository.analysis_buckets(..., start=bucket_start)`
-nur den einen abgeschlossenen Bucket; ein leerer Bucket wird als DATENLUECKE
-persistiert. Die laufende Instanz wird behalten; niemals für jeden Live-Punkt
-neu erstellen und niemals den ganzen Brand regelmäßig neu berechnen.
+Nach Bereitstellung des aktualisierten Images und Anwendung vorhandener Migrationen:
 
-Nach Prozessneustart verfügbare Sensor-Vorgeschichte einmal durch dieselbe update-Logik replayen,
-dann fortsetzen. Noch kein persistenter Analyzer-Checkpoint. Wenn eine
-Persistenzoperation fehlschlägt, vor einem Retry den Analyzer durch Replay
-wiederherstellen; update darf für denselben Zeitstempel nicht doppelt laufen.
+```sh
+docker compose up -d --build --no-deps analysis-worker
+docker compose logs --tail=100 analysis-worker
+```
 
 ## K. Offene Annahmen und Risiken
 

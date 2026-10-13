@@ -157,6 +157,17 @@ class Repository:
                       (eid, (timestamp or now()).isoformat(), run_id, actuator_id, event_type, json.dumps(details)), fetch=None)
         return self._execute("SELECT * FROM actuator_events WHERE id=%s", (eid,), "one")
 
+    def latest_analysis_time(self, detector_name, algo_version):
+        row = self._execute("SELECT max(time) AS time FROM process_analysis "
+                            "WHERE detector_name=%s AND algo_version=%s",
+                            (detector_name, algo_version), 'one')
+        return row['time']
+
+    def first_analysis_measurement_time(self):
+        row = self._execute("SELECT min(time) AS time FROM sensor_measurements "
+                            "WHERE sensor_id IN ('vapor-temp','ec-1','ec-temp')", fetch='one')
+        return row['time']
+
     def analysis_buckets(self, end, seconds, valid_qualities=('good', 'simulated'), start=None):
         # Aggregation only. Features and all process formulas live in process_analysis.
         lower_bound = ' AND time >= %s' if start is not None else ''
