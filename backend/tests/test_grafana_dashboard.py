@@ -23,7 +23,7 @@ def test_persisted_analysis_panels():
     for p in analysis:
         sql=p['targets'][0]['rawSql']
         assert 'FROM process_analysis' in sql
-        assert '$__timeFilter(time)' in sql
+        assert ('$__timeFilter(time)' in sql) == (p['id']!=25)
         assert 'analysis_version' in sql and 'analysis_detector' in sql
         assert 'run_id' not in sql and 'analysis_run' not in sql
         assert not any(s in sql.lower() for s in ('sensor_measurements','lag(', 'avg(', 'with ', 'insert ', 'update ', 'delete '))
@@ -65,7 +65,7 @@ def test_gradual_score_display_and_process_state_mappings():
         assert props['thresholds']['steps'][-1]['value']==50
         assert 'keine statistische Wahrscheinlichkeit' in panel['description']
     mappings=panels[24]['fieldConfig']['defaults']['mappings'][0]['options']
-    for state in ('VORLAUF','VORLAUF_AUSKLANG','MITTELLAUF','NACHLAUF_ENTWICKELT','NACHLAUF_WAHRSCHEINLICH'):
+    for state in ('BEREIT','AUFHEIZEN','ABKÜHLEN','VORLAUF','VORLAUF_AUSKLANG','MITTELLAUF','NACHLAUF_ENTWICKELT','NACHLAUF'):
         assert mappings[state]['text']==state
 
 

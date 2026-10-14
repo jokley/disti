@@ -85,8 +85,9 @@ streng steigen. Die API normalisiert Eingaben nach UTC; Run-Zuordnungen haben
 keinen Einfluss auf den Analyzer.
 
 1. Datenlücke oder ungültiger Sensor: keine neuen Features/Detector-Entscheidungen.
-2. Gültiger Brandstart bei T >= 75 °C; ein heiß begonnener historischer Zeitraum kann
-   beim ersten gültigen Punkt starten. Unter 75 °C: IDLE vor dem ersten Start.
+2. Der bestehende interne Detector startet unverändert bei T >= 75 °C;
+   diese Regel steuert Baseline/CUSUM, nicht den sichtbaren Aufheizbeginn.
+   Der sichtbare Lifecycle startet ohne absolute Temperaturgrenze aus BEREIT.
 3. dT/dt ist die Steigung einer linearen Regression der Temperatur über das
    kausale 60-s-Fenster, in °C/min. Dies glättet die kurzfristige Dynamik; es ist
    nicht die Differenz ungeglätteter Einzelwerte.
@@ -117,14 +118,47 @@ keinen Einfluss auf den Analyzer.
    ```
 
 8. Alarm bei T < 86 °C: NACHLAUF_ENTWICKELT; ab 86 °C:
-   NACHLAUF_WAHRSCHEINLICH. Das sind experimentelle Interpretationen.
-9. Ende bei Abfall >= 1.5 °C unter laufendes Tmax, T < 75 °C oder
-   kontinuierlich >= 180 s ungültigem Sensor. S=0, Alarm=false, ENDE.
-   Nach ENDE wird ein neuer Brand erst nach einem gültigen Wert unter 75 °C
-   und anschließender Rückkehr auf >= 75 °C freigegeben. Ein explizites
-   reset() setzt den Analyzer zurück.
+   NACHLAUF (bisherige zweite Stufe, nur umbenannt).
+9. Interner Detector-Stopp weiterhin bei Abfall >= 1.5 °C unter laufendes
+   Tmax, T < 75 °C oder kontinuierlich >=180 s ungültigem Sensor. S=0,
+   Alarm=false. Nach Stopp startet dieser interne Detector erst nach einem
+   gültigen Wert unter 75 °C und erneuter Rückkehr auf >=75 °C. Die vorhandene
+   boolesche Spalte `ended` beschreibt weiterhin diesen internen Stopp; sie
+   ist kein sichtbarer Prozess-State. Damit bleiben Baseline, CUSUM, Score,
+   Alarm und alle diagnostischen Formeln unverändert.
 
-Die angezeigte Vorlauf-/Mittellauf-Phase entsteht ausschließlich aus dT/dt.
+### Sichtbarer Betriebs-Lifecycle
+
+BEREIT → AUFHEIZEN → VORLAUF → VORLAUF_AUSKLANG → MITTELLAUF →
+NACHLAUF_ENTWICKELT → NACHLAUF → ABKÜHLEN → BEREIT.
+DATENLUECKE und SENSOR_UNGUELTIG bleiben technische Qualitätsüberlagerungen,
+keine zusätzlichen normalen Prozessphasen. Der physische Zustand bleibt
+während solcher Überlagerungen intern erhalten.
+
+- Initialzustand ist BEREIT. `dT/dt > 0.20` °C/min über 60 s startet die
+  sichtbare Aufheizphase, unabhängig von absoluter Temperatur und EC. Ein
+  kurzer Spike reicht nicht. Beim Start mitten in einer Bewegung ohne
+  vollständige Vorgeschichte ist BEREIT eine Initialannahme.
+- Nach Erreichen von NACHLAUF bleibt diese physische Phase bis zum
+  Abkühlbeginn bestehen; das boolesche CUSUM-Alarmsignal wird dadurch nicht
+  verändert. ABKÜHLEN benötigt `dT/dt <= -0.50` für mindestens 60 s und
+  mindestens 2.0 °C Abfall gegenüber dem Maximum der letzten 300 s. Ein
+  interner Detector-Stopp alleine erzeugt keinen neuen sichtbaren Endzustand.
+- ABKÜHLEN → BEREIT: kausales 180-s-Fenster mit Median `abs(dT/dt) <=0.10`
+  °C/min und mindestens 80 % der Werte `abs(dT/dt) <=0.20`. Das toleriert
+  einzelne Ausreißer, ohne fortgesetzte Abkühlung als Ruhe einzustufen. Es gibt
+  keine Raumtemperaturgrenze. Danach kann ein neuer positiver Anstieg starten.
+- Lücken oder ungültige Sensoren setzen die neuen Timer/Fenster zurück.
+  Nachfolgende gültige Buckets bauen sie neu auf. Keine Interpolation.
+
+Neue zentrale Config-Werte: `heating_start_dtdt_min=0.20`,
+`heating_start_persistence_seconds=60`, `cooling_dtdt_max=-0.50`,
+`cooling_persistence_seconds=60`, `cooling_temperature_drop=2.0`,
+`cooling_peak_window_seconds=300`, `ready_window_seconds=180`,
+`ready_median_abs_dtdt_max=0.10`, `ready_bucket_abs_dtdt_max=0.20`,
+`ready_required_fraction=0.80`.
+
+Die angezeigte Vorlauf-/Mittellauf-Phase entsteht weiterhin ausschließlich aus dT/dt.
 Die vorhandene Plateau-Erkennung für CUSUM-Baseline und EC-Referenz bleibt
 unverändert und ist unabhängig von der neuen Anzeigeentscheidung. Ebenso
 bleiben bestehende Prozessstart-/Endegrenzen und Nachlauf-Temperatur-Gates
@@ -149,8 +183,8 @@ unverändert. Die Vorlauf-Übergänge selbst verwenden keine absolute Temperatur
 Datenlücken und ungültige Sensorwerte leeren das dT/dt-Fenster und die Timer;
 die vorher beobachtete Aufheizphase bleibt bekannt. Die schon erreichte Stufe
 bleibt erhalten, wird während der Lücke aber durch den bestehenden Datenstatus
-überlagert. Neuer Prozess, ENDE und reset() löschen Vorlauf-State und Historie.
-Nachlauf und ENDE haben wie bisher Vorrang. Keine Referenzzeiten und keine
+überlagert. Der unveränderte interne Detector-Start/-Stopp und reset() löschen seine
+Vorlauf-Historie. Nachlauf und der sichtbare Abkühl-Lifecycle haben Vorrang. Keine Referenzzeiten und keine
 EC-, Trend- oder Recovery-Bedingung für die Übergänge.
 
 Zentrale Werte in config.py:
@@ -167,11 +201,11 @@ Eintritt, konstant für den Prozess. `ec_drop_from_plateau` ist Referenz minus
 aktuelles 1-min-Mittel, `ec_min_since_plateau` das kleinste 1-min-Mittel seit
 Plateau und `ec_recovery_from_min` der Abstand zu diesem Minimum. Vor diesem
 Plateau und in ungültigen Buckets NULL. Lücken erhalten Referenz/Minimum,
-ENDE und neuer Prozess löschen beides. Diese Größen sind nur diagnostisch.
+Interner Detector-Stopp und neuer Prozess löschen beides. Diese Größen sind nur diagnostisch.
 
 ## E. Parameter und Fensterspezifikation
 
-Alle Schwellen in `config.py`. Standard: 20 s Buckets; Start 75 °C;
+Alle Schwellen in `config.py`. Standard: 20 s Buckets; interner Detector-Start 75 °C;
 Plateau dT/dt < 1 °C/min, drei gültige Buckets; Delay 300 s;
 Halbwertszeit 600 s; Warmup 30 Samples; Varianz 4 mV²; Sigma >= 1.5 mV;
 Freeze 84.5 °C; Detection-Gate 84 °C; Bestätigungs-Gate 86 °C;
@@ -275,17 +309,20 @@ Direkter API-Zugang: Port 5000; hinter dem vorhandenen Nginx-Prefix:
 ## G. Grafana: Betriebsansicht
 
 Die Dashboard-UID und Detector-/Versionsfilter bleiben erhalten. Die Live-Ansicht
-verwendet den Zeitraum bis `now` und weiterhin 10 s Refresh. Beim historischen
-Zoom zeigen Status und Kernwerte den letzten Analysepunkt im gewählten Zeitraum.
+verwendet den Zeitraum bis `now` und weiterhin 10 s Refresh. Detector/Version
+bleiben als versteckte Variablen mit bestehenden Defaults erhalten. Kurven und
+Timeline verwenden den Zeitfilter; der aktuelle State zeigt bewusst global den
+letzten vorhandenen Analysepunkt, auch beim historischen Zoom.
 
 Hauptbereich, von oben nach unten:
 
 - **Aktueller Prozessstatus**: große Stat mit sämtlichen bestehenden State-
-  Mappings, ausschließlich letzter gespeicherter process_state. Keine neue
+  Mappings, ausschließlich letzter gespeicherter process_state ohne Zeitfilter, als String. Keine neue
   State- oder transition_reason-Logik; keine Berechnung der State-Dauer.
 - **Prozessstatus**: kompakte Timeline aus gespeicherten Zuständen.
-- **Aktuelle Prozesswerte**: Kesseldampf, dT/dt, EC raw, Nachlauf-Score und Alarm
-  des letzten abgeschlossenen Analyse-Buckets. Kleine Kühler-Anzeige daneben;
+- **Aktuelle Prozesswerte**: Kesseldampf und Kühler als kompakte Temperaturwerte neben dem aktuellen
+  Prozessstatus; darunter Timeline und dominanter Kesseldampf-/dT/dt-Verlauf.
+  Prozessdynamik, EC 1 min und kompakter Nachlauf-Score/Alarm bleiben sichtbar;
   der Kühler ist keine Entscheidungsgröße für den State.
 - **Temperatur – Prozessanalyse**, **EC Prozesssignal**, **Nachlauf-Detector**:
   nur operative Kurven. Keine Glättungs-/Trend-/CUSUM-Interna im Hauptbereich.
@@ -345,23 +382,67 @@ Die vollständige Suite umfasst Backend- und Watchdogtests; das aktuelle Ergebni
 ist im Abschlussbericht dokumentiert. Ein gerendertes Grafana-UI und die echte
 TimescaleDB-Laufzeit sind zusätzliche Integrationsprüfungen.
 
-## I. Historische Brände vom 09.10.2026 neu berechnen
+## I. Historische Plausibilitätsprüfung am 09.10.2026
 
-Nach Bereitstellung des Backends und Anwendung der Migrationen 004/005 den
-gesamten 09.10.2026 in Europe/Berlin (UTC+02:00) berechnen:
+Verwendet wurden die zwei bereitgestellten Grafana-CSV-Exporte
+`Vergleichsmarker-data-2026-10-14 13_05_30.csv` und
+`CUSUM Diagnose-data-2026-10-14 13_05_53.csv` mit je 1183 abgeschlossenen
+20-s-Punkten von 12:55:40 bis 19:29:40. Zeitannahme: Europe/Berlin, UTC+02:00.
+
+Dies ist ein **Export-Replay, kein vollständiger Rohdaten-Rebuild**: Die Dateien
+enthalten gerundete Bucket-Mittel, keinen PT1000-Rohkanal, keine vollständigen
+Qualitätsflags und keine Vorgeschichte vor Exportbeginn. Für das Replay wurde
+der fehlende PT-Kanal als gültig angenommen; bestehende EC-Ungültigkeitsregeln
+blieben aktiv. Weder sensor_measurements noch produktive Analysewerte wurden
+mit Exportdaten befüllt. Ein echter Rebuild benötigt die originale Datenbank.
+
+| Phase | Zwetschke | Birne |
+|---|---|---|
+| BEREIT vor Aufheizen | 12:55:40 (Initialannahme) | 15:46:00 |
+| AUFHEIZEN | 12:59:00 | 15:56:20 |
+| VORLAUF | 14:05:00 | 16:44:40 |
+| VORLAUF_AUSKLANG | 14:06:00 | 16:46:20 |
+| MITTELLAUF | 14:07:40 | 16:48:00 |
+| NACHLAUF_ENTWICKELT | 14:55:20 | 17:45:40 |
+| NACHLAUF | 14:58:00 | 17:50:00 |
+| ABKÜHLEN | 15:14:00 | 18:32:00 |
+| BEREIT danach | 15:46:00 | 18:51:40 |
+
+Zusätzliche Qualitätsüberlagerungen im ersten Verlauf:
+SENSOR_UNGUELTIG 13:37:40–13:50:40 und 15:21:00–15:42:40; danach Wiederaufnahme
+der zuvor gehaltenen physischen Phase. Daher wird BEREIT nicht schon in einem
+Fenster mit fehlender/ungültiger Sensorik bestätigt.
+
+Der erste Aufheizbeginn ist besonders vorsichtig zu interpretieren: Der Export
+beginnt bereits mit 34 °C und positivem Gradienten, danach folgt gegen 13:02 ein
+starker Temperatursprung nach unten. Der CSV-Ausschnitt alleine beweist nicht,
+ob die erste Bewegung schon zum Brand gehörte. Es wurde keine Sonderregel auf
+bekannte Referenzzeiten gefittet. Bisherige Aufheiz-Anzeige im identischen
+Export-Replay: 13:59:40 bzw. 16:40:20; die neue positive Dynamik wird früher
+sichtbar. Vorlauf- und Nachlauf-Zeitpunkte bleiben in beiden Verläufen exakt
+gleich. Die exportierten booleschen Alarme stimmen in allen 1183 Punkten mit
+dem Replay überein. Im direkten Vergleich mit dem vorherigen Analyzer gibt es
+keine Abweichung in CUSUM-Details, Score, Alarm oder internem ended-Flag.
+
+### Kompatibilität und echter Rebuild
+
+Migration 006 verwirft ausschließlich betroffene abgeleitete Detector-/Versions-
+Serien, wenn sie noch alte IDLE-/ENDE-/NACHLAUF_WAHRSCHEINLICH-Zeilen enthalten.
+Eine pauschale Umbenennung von ENDE wäre falsch, da daraus weder Abkühlung noch
+Ruhezustand abgeleitet werden können. Rohdaten bleiben unverändert. Ohne alte
+Zeilen ist ein erneuter Migrationslauf wirkungslos. Der unveränderte Worker
+kann betroffene Serien anschließend aus der originalen Rohdaten-Historie neu
+aufbauen. Vor Migration den alten Worker stoppen, aktualisierten Code und
+Migrationen bereitstellen, danach den neuen Worker starten. Keine produktive
+Migration in dieser Sitzung.
+
+Für einen anschließenden echten Tages-Rebuild bei laufender Originaldatenbank:
 
 ```sh
 curl --fail-with-body -X POST http://localhost:5000/api/analysis/rebuild \
   -H 'Content-Type: application/json' \
   -d '{"from":"2026-10-09T00:00:00+02:00","to":"2026-10-10T00:00:00+02:00","algo_version":"cusum-v1"}'
 ```
-
-Anschließend auf den jeweiligen Brand in Grafana zoomen und dieselbe Version
-wählen. Die Rohdaten brauchen keine Zuordnung zu distillation_runs. Die experimentellen
-Vorlaufgrenzen müssen anschließend an den historischen Bränden auf Plausibilität
-geprüft werden; es wurde nicht auf sensorische Referenzzeiten gefittet. In der
-aktuellen Arbeitsumgebung ist die lokale PostgreSQL-Datenbank leer, daher sind
-keine historischen Zustandswechsel oder eine Plausibilitätsbewertung verfügbar.
 
 ## J. Kontinuierliche Live-Verarbeitung
 

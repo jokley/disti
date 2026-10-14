@@ -17,11 +17,11 @@ def fast(**changes):
 
 def test_plateau_persistence_and_dt():
     a=ProcessAnalyzer()
-    assert a.update(p(0)).process_state==S.AUFHEIZEN
+    assert a.update(p(0)).process_state==S.BEREIT
     for i in (1,2):
-        assert a.update(p(i)).process_state==S.AUFHEIZEN
+        assert a.update(p(i)).process_state==S.BEREIT
     r=a.update(p(3))
-    assert r.process_state==S.AUFHEIZEN and r.features.dtdt==0
+    assert r.process_state==S.BEREIT and r.features.dtdt==0
     assert a.plateau_time==p(3).time
 
 def test_temperature_slope_and_time_windows():
@@ -43,7 +43,7 @@ def test_baseline_delay_and_no_forced_middle():
     r=a.update(p(18))
     assert r.details.baseline_samples==1
     for i in range(19,60): r=a.update(p(i))
-    assert r.process_state==S.AUFHEIZEN
+    assert r.process_state==S.BEREIT
     assert r.details.baseline_samples==42
     assert r.details.baseline_sigma==1.5
 
@@ -66,7 +66,7 @@ def test_freeze_z_cusum_hysteresis_temperature_gates():
     assert r.detector_alarm and r.process_state==S.NACHLAUF_ENTWICKELT
     prev=r.details.cusum_s
     r=a.update(p(6,t=86,mv=101))
-    assert r.process_state==S.NACHLAUF_WAHRSCHEINLICH
+    assert r.process_state==S.NACHLAUF
     assert r.details.cusum_s==pytest.approx(.995*prev+r.details.z-.75)
     assert r.detector_score==min(r.details.cusum_s/8,2)
     r=a.update(p(7,t=86,mv=80))
@@ -97,7 +97,7 @@ def test_invalid_duration_and_gap_interrupts_timer():
     a.update(p(0))
     for i in range(1,10):
         assert a.update(p(i,mv=201)).process_state==S.SENSOR_UNGUELTIG
-    assert a.update(p(10,mv=201)).process_state==S.ENDE
+    assert a.update(p(10,mv=201)).process_state==S.SENSOR_UNGUELTIG
     assert not a.alarm and a.s==0
     a=ProcessAnalyzer();a.update(p(0))
     assert a.update(p(1,pt=3300)).process_state==S.SENSOR_UNGUELTIG
@@ -108,15 +108,15 @@ def test_invalid_duration_and_gap_interrupts_timer():
 def test_end_restart_reset(temperature):
     a=ProcessAnalyzer();a.update(p(0))
     r=a.update(p(1,t=temperature))
-    assert r.ended and r.process_state==S.ENDE and r.detector_score==0
+    assert r.ended and r.process_state==S.BEREIT and r.detector_score==0
     if temperature>=75:
-        assert a.update(p(2)).process_state==S.ENDE
+        assert a.update(p(2)).process_state==S.BEREIT
         a.update(p(3,t=74)); i=4
     else: i=2
-    assert a.update(p(i)).process_state==S.AUFHEIZEN
+    assert a.update(p(i)).process_state==S.BEREIT
     a.reset()
     assert a.last_time is None and a.mu is None and a.plateau_time is None
-    assert a.update(p(0)).process_state==S.AUFHEIZEN
+    assert a.update(p(0)).process_state==S.BEREIT
 
 def test_order_and_no_future():
     a=ProcessAnalyzer();prefix=[a.update(p(i,mv=100+i)) for i in range(5)]
@@ -129,7 +129,7 @@ def test_order_and_no_future():
 def test_optional_strict_plateau():
     a=ProcessAnalyzer(replace(AnalysisConfig(),strict_plateau=True))
     for i in range(5): r=a.update(p(i,t=80))
-    assert r.process_state==S.AUFHEIZEN
+    assert r.process_state==S.BEREIT
 
 def test_missing_bucket_generation():
     rows=[{'time':T,'vapor_temp':82,'raw_mv':100,'pt_raw_mv':1000},
@@ -420,9 +420,9 @@ def test_multiple_brands_live_replay_and_long_state_history(analysis_repo):
     analyzer=ProcessAnalyzer()
     live_results=[service.process_completed_bucket(analyzer,p(i).time) for i in range(180)]
     assert live_results[119].detector_alarm
-    assert live_results[120].process_state==S.ENDE
-    assert live_results[123].process_state==S.ENDE
-    assert live_results[130].process_state==S.AUFHEIZEN
+    assert live_results[120].ended and live_results[120].detector_score==0
+    assert live_results[123].process_state==S.DATENLUECKE
+    assert not live_results[130].ended
     assert live_results[130].details.baseline_mu is None
     assert live_results[179].details.baseline_mu==90
     live=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
@@ -513,7 +513,7 @@ def test_plateau_reference_uses_existing_mean_and_is_causal():
         assert all(getattr(r.features,name) is None for name in (
             'ec_plateau_ref','ec_drop_from_plateau','ec_min_since_plateau','ec_recovery_from_min'))
     r=a.update(p(3,mv=97))
-    assert r.process_state==S.AUFHEIZEN
+    assert r.process_state==S.BEREIT
     assert r.features.raw_mv_1m==98 and r.features.ec_plateau_ref==98
     assert r.features.ec_plateau_ref!=r.raw_mv
     assert r.features.ec_drop_from_plateau==0 and r.features.ec_recovery_from_min==0
@@ -541,7 +541,7 @@ def test_plateau_ec_reset_after_end_and_new_process():
     a=plateau_analyzer()
     for i in range(4,7): a.update(p(i,mv=97))
     r=a.update(p(7,t=70,mv=97))
-    assert r.process_state==S.ENDE
+    assert r.process_state==S.BEREIT
     assert a.ec_plateau_ref is None and a.ec_min_since_plateau is None
     assert r.features.ec_plateau_ref is None
     for i in range(8,11):
@@ -567,7 +567,7 @@ def test_plateau_reference_requires_confirmed_temperature_gate():
     a=ProcessAnalyzer()
     for i in range(20):
         r=a.update(p(i,t=76+i/2,mv=100-i))
-        assert r.process_state==S.AUFHEIZEN and r.features.ec_plateau_ref is None
+        assert r.process_state in (S.BEREIT,S.AUFHEIZEN) and r.features.ec_plateau_ref is None
 
 
 
@@ -590,7 +590,8 @@ class ControlledTemperatureFeatures:
 
 
 def temperature_analyzer():
-    a=ProcessAnalyzer();f=ControlledTemperatureFeatures();a.features=f
+    a=ProcessAnalyzer();a.process_state=S.AUFHEIZEN
+    f=ControlledTemperatureFeatures();a.features=f
     return a,f
 
 
@@ -638,7 +639,7 @@ def test_temperature_two_stages_window_then_confirmation_and_latch():
     for i in range(8,12): assert slope_point(a,f,i,0).process_state==S.VORLAUF_AUSKLANG
     assert slope_point(a,f,12,0).process_state==S.MITTELLAUF # 100 s >=90 s
     for i in range(13,20): assert slope_point(a,f,i,2).process_state==S.MITTELLAUF
-    assert slope_point(a,f,20,0,t=70).process_state==S.ENDE
+    assert slope_point(a,f,20,0,t=70).ended
     assert not a.heating_seen and not a.heads_dtdt
 
 
@@ -708,7 +709,7 @@ def test_actual_temperature_curve_same_transitions_at_different_plateau_levels(p
         t=plateau-3+i*.5 if i<6 else plateau-.5
         r=a.update(p(i,t=t))
         if not states or states[-1]!=r.process_state: states.append(r.process_state)
-    assert states==[S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
+    assert states==[S.BEREIT,S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
 
 
 def test_ec_diagnostics_do_not_block_temperature_transitions():
@@ -746,7 +747,7 @@ def test_temperature_states_live_rebuild_and_ec_diagnostics_identical(analysis_r
     service=AnalysisService(analysis_repo);a=ProcessAnalyzer()
     live=[service.process_completed_bucket(a,p(i).time) for i in range(40)]
     changes=[r.process_state for i,r in enumerate(live) if i==0 or live[i-1].process_state!=r.process_state]
-    assert changes==[S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
+    assert changes==[S.BEREIT,S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
     rows=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
     assert rows[-1]['ec_drop_from_plateau']==0 and rows[-1]['ec_recovery_from_min']==0
     service.rebuild(T,p(40).time)

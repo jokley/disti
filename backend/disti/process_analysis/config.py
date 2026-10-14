@@ -33,6 +33,16 @@ class AnalysisConfig:
     pt_disconnect_tolerance_mv: float = 100.0
     feature_windows_seconds: tuple[int, int, int] = (60, 180, 300)
     trend_accel_lag_seconds: int = 60
+    heating_start_dtdt_min: float = 0.20
+    heating_start_persistence_seconds: int = 60
+    cooling_dtdt_max: float = -0.50
+    cooling_persistence_seconds: int = 60
+    cooling_temperature_drop: float = 2.0
+    cooling_peak_window_seconds: int = 300
+    ready_window_seconds: int = 180
+    ready_median_abs_dtdt_max: float = 0.10
+    ready_bucket_abs_dtdt_max: float = 0.20
+    ready_required_fraction: float = 0.80
     heating_detect_dtdt_min: float = 1.0
     vorlauf_start_dtdt_max: float = 0.30
     vorlauf_start_persistence_seconds: int = 40
@@ -60,3 +70,11 @@ class AnalysisConfig:
             raise ValueError('heads window must be positive')
         if not 0 <= self.vorlauf_ausklang_required_fraction <= 1:
             raise ValueError('heads fraction must be between zero and one')
+        if self.heating_start_dtdt_min <= 0 or self.cooling_dtdt_max >= 0:
+            raise ValueError('lifecycle gradients must have the expected sign')
+        if min(self.heating_start_persistence_seconds, self.cooling_persistence_seconds) < 0:
+            raise ValueError('lifecycle persistence must be nonnegative')
+        if min(self.cooling_temperature_drop, self.cooling_peak_window_seconds, self.ready_window_seconds) <= 0:
+            raise ValueError('lifecycle windows and drop must be positive')
+        if not 0 <= self.ready_required_fraction <= 1:
+            raise ValueError('ready fraction must be between zero and one')
