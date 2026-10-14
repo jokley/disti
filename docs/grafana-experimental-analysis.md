@@ -158,18 +158,32 @@ Neue zentrale Config-Werte: `heating_start_dtdt_min=0.20`,
 `ready_median_abs_dtdt_max=0.10`, `ready_bucket_abs_dtdt_max=0.20`,
 `ready_required_fraction=0.80`.
 
-Die angezeigte Vorlauf-/Mittellauf-Phase entsteht weiterhin ausschließlich aus dT/dt.
+Der Vorlauf beginnt mit einem qualitätsgeprüften EC-Anstieg nach erkannter
+starker Aufheizung. Ausklang und Mittellauf entstehen weiterhin aus dT/dt.
 Die vorhandene Plateau-Erkennung für CUSUM-Baseline und EC-Referenz bleibt
 unverändert und ist unabhängig von der neuen Anzeigeentscheidung. Ebenso
 bleiben bestehende Prozessstart-/Endegrenzen und Nachlauf-Temperatur-Gates
 unverändert. Die Vorlauf-Übergänge selbst verwenden keine absolute Temperatur.
 
-1. AUFHEIZEN: Erst ein beobachtetes `dT/dt >= 1.0` °C/min gibt die nachfolgenden
-   Übergänge frei. Ein heiß gestarteter, konstanter Verlauf ohne Aufheizen
-   erhält keine automatische VORLAUF-Anzeige, auch wenn die CUSUM-Baseline
-   bereits ein Plateau erkannt hat.
-2. VORLAUF: nach dieser Aufheizphase `dT/dt <= 0.30` für mindestens 40 s.
-   Nicht passende Werte, Lücken oder Sensorfehler unterbrechen die Persistenz.
+1. AUFHEIZEN: Innerhalb der aktuellen sichtbaren Aufheizphase bestätigt ein
+   beobachtetes `dT/dt >= heating_detect_dtdt_min=1.0` °C/min starke Aufheizung
+   (`strong_heating_seen`). Dieser Merker bleibt über interne Detector-Resets
+   erhalten; ein neuer sichtbarer Aufheizbeginn oder reset() löscht ihn.
+2. VORLAUF: `raw_mv_1m - ec_baseline_5m >= 2.0` mV für mindestens 40 s,
+   während AUFHEIZEN aktiv und starke Aufheizung bereits erkannt ist.
+   `ec_baseline_5m` ist der Median aller gültigen `raw_mv_1m`-Werte im Fenster
+   `[t-300 s, t)`: bei 20-s-Buckets genau 15 vorherige Werte, ohne aktuellen
+   Wert. Erst nach vollständigen 300 s verfügbar; keine Zukunftswerte und keine
+   Interpolation. Bei 20-s-Buckets bestätigen drei aufeinanderfolgende
+   erfüllte Beobachtungen 40 s. Jede Unterschreitung unterbricht die Persistenz.
+   Datenlücken, ungültige Messwerte und fehlendes EC-Mittel leeren EC-Fenster
+   und Timer; bestätigte Aufheizung bleibt innerhalb derselben Phase bekannt.
+   Die EC-Historie darf bereits in BEREIT aufwärmen. Interne Detector-Starts
+   löschen diese separate Historie nicht. Kein Peak-Drop-, Kollaps- oder
+   dT/dt<=0.30-Trigger, keine absolute Temperatur und keine PT1000-Abkühlbedingung.
+   Die unveränderte allgemeine Sensor-/EC-Qualitätsprüfung gilt weiterhin,
+   insbesondere `raw_mv <= ec_max_mv=200` und die PT-Disconnect-Prüfung.
+   Nach VORLAUF kein Rückfall nach AUFHEIZEN, auch nicht beim Detector-Start.
 3. VORLAUF_AUSKLANG: vollständig aufgewärmtes, kausales 120-s-Fenster
    `(t-120 s, t]` mit `median(abs(dT/dt)) <= 0.12` °C/min und mindestens
    80 % der Werte `abs(dT/dt) <= 0.20` °C/min. Keine Interpolation. Bei
@@ -185,15 +199,22 @@ die vorher beobachtete Aufheizphase bleibt bekannt. Die schon erreichte Stufe
 bleibt erhalten, wird während der Lücke aber durch den bestehenden Datenstatus
 überlagert. Der unveränderte interne Detector-Start/-Stopp und reset() löschen seine
 Vorlauf-Historie. Nachlauf und der sichtbare Abkühl-Lifecycle haben Vorrang. Keine Referenzzeiten und keine
-EC-, Trend- oder Recovery-Bedingung für die Übergänge.
+Trend- oder Recovery-Bedingung für die Übergänge; EC gilt ausschließlich für
+AUFHEIZEN → VORLAUF. PT1000 wird unverändert erfasst und ist kein zusätzliches
+fachliches Kontaktkriterium.
 
 Zentrale Werte in config.py:
-`heating_detect_dtdt_min=1.0`, `vorlauf_start_dtdt_max=0.30`,
-`vorlauf_start_persistence_seconds=40`, `vorlauf_ausklang_window_seconds=120`,
+`heating_detect_dtdt_min=1.0`, `vorlauf_ec_baseline_window_seconds=300`,
+`vorlauf_ec_rise_threshold_mv=2.0`, `vorlauf_ec_rise_persistence_seconds=40`,
+`vorlauf_ausklang_window_seconds=120`,
 `vorlauf_ausklang_median_abs_dtdt_max=0.12`,
 `vorlauf_ausklang_bucket_abs_dtdt_max=0.20`,
 `vorlauf_ausklang_required_fraction=0.80`, `vorlauf_middle_confirm_seconds=90`.
-Die vorherigen EC-Vorlauf-Entscheidungsparameter wurden entfernt.
+Nicht mehr verwendet: Peak-Drop-Parameter sowie starke Median-/Kollapsfenster
+und `vorlauf_start_persistence_seconds`. Die EC-Start-Baseline ist von der
+CUSUM-Baseline und der bestehenden Plateau-Referenz getrennt. Sie wird nur im
+Analyzer gehalten, nicht als neue Datenbankspalte gespeichert. Deshalb bleibt
+das Dashboard in diesem Schritt unverändert und erhält keine Referenzlinie.
 
 Alle vorhandenen EC-Features werden unverändert berechnet und gespeichert.
 Die Plateau-Referenz ist weiterhin `raw_mv_1m` am bestätigten Baseline-Plateau-
@@ -373,7 +394,7 @@ Temperaturdynamik-Tests prüfen vorherige Aufheizphase, persistenten Einbruch,
 vollständiges Near-zero-Fenster, Median und Anteil als getrennte Bedingungen,
 Ausreißertoleranz, weitere Bestätigung und deren Unterbrechung, Datenlücken,
 MITTELLAUF-Verriegelung sowie gleiche Zustandsfolgen bei Plateau-Niveaus von
-79/82/84 °C. EC, Trends und Recovery blockieren die Übergänge nicht.
+79/82/84 °C mit gleichem EC-Kontaktsignal. Trends und Recovery bleiben diagnostisch.
 Live und vollständiger/Teil-Rebuild speichern dieselben Zustände und EC-
 Diagnosen; Rohdaten bleiben unverändert. CUSUM-Diagnosen und Scores sind trotz
 unterschiedlicher Vorlauf-Freigabe identisch; h=8 und Hysterese bleiben erhalten.
@@ -384,45 +405,52 @@ TimescaleDB-Laufzeit sind zusätzliche Integrationsprüfungen.
 
 ## I. Historische Plausibilitätsprüfung am 09.10.2026
 
-Verwendet wurden die zwei bereitgestellten Grafana-CSV-Exporte
-`Vergleichsmarker-data-2026-10-14 13_05_30.csv` und
-`CUSUM Diagnose-data-2026-10-14 13_05_53.csv` mit je 1183 abgeschlossenen
-20-s-Punkten von 12:55:40 bis 19:29:40. Zeitannahme: Europe/Berlin, UTC+02:00.
+Verwendet wurden die neuen Exporte `Analog-Rohwerte-data-2026-10-14 21_01_46.csv`,
+`EC Glättung _ Baseline-data-2026-10-14 21_01_18.csv` und
+`Kesseldampf – Prozessverlauf-data-2026-10-14 21_00_58.csv`.
+Der Replay verarbeitet 1041 zusammenhängende 20-s-Buckets von 13:02:40 bis
+18:49:20 mit dem unveränderten ProcessAnalyzer-Eingangspfad. Der PT1000-Rohkanal
+wird aus dem gleichzeitigen 10-s-Sample übernommen; EC/Kesseldampf sind gerundete
+exportierte Bucket-Mittel. Zeitannahme: Europe/Vienna, UTC+02:00.
 
-Dies ist ein **Export-Replay, kein vollständiger Rohdaten-Rebuild**: Die Dateien
-enthalten gerundete Bucket-Mittel, keinen PT1000-Rohkanal, keine vollständigen
-Qualitätsflags und keine Vorgeschichte vor Exportbeginn. Für das Replay wurde
-der fehlende PT-Kanal als gültig angenommen; bestehende EC-Ungültigkeitsregeln
-blieben aktiv. Weder sensor_measurements noch produktive Analysewerte wurden
-mit Exportdaten befüllt. Ein echter Rebuild benötigt die originale Datenbank.
+Dies ist ein **Export-Replay, kein vollständiger Rohdaten-Rebuild**: vollständige
+Qualitätsflags und die Vorgeschichte fehlen; der PT-Kanal ist ein dargestellter
+letzter Messwert statt eines rekonstruierten Bucket-Mittels. Keine Rohdaten oder
+produktiven Analysewerte wurden geschrieben. Der frühere Replay mit künstlich
+als gültig angenommenem PT-Kanal ist für den Aufheizbeginn nicht maßgeblich.
 
-| Phase | Zwetschke | Birne |
+| Wert | Zwetschke | Birne |
 |---|---|---|
-| BEREIT vor Aufheizen | 12:55:40 (Initialannahme) | 15:46:00 |
-| AUFHEIZEN | 12:59:00 | 15:56:20 |
-| VORLAUF | 14:05:00 | 16:44:40 |
-| VORLAUF_AUSKLANG | 14:06:00 | 16:46:20 |
-| MITTELLAUF | 14:07:40 | 16:48:00 |
-| NACHLAUF_ENTWICKELT | 14:55:20 | 17:45:40 |
-| NACHLAUF | 14:58:00 | 17:50:00 |
-| ABKÜHLEN | 15:14:00 | 18:32:00 |
-| BEREIT danach | 15:46:00 | 18:51:40 |
+| AUFHEIZEN im verfügbaren Replay | 13:53:40 | 15:56:20 |
+| strong_heating_seen (dT/dt >=1.0) | 13:54:00 | 15:56:40 |
+| Vollständige EC-Baseline erstmals nach letzter Qualitätsunterbrechung | 13:55:40 | 15:47:40 (vor AUFHEIZEN) |
+| Erster freigegebener EC-Schwellenüberschritt | 13:57:00 | 16:40:20 |
+| 40 s bestätigt / neuer VORLAUF | 13:57:40 | 16:41:00 |
+| raw_mv_1m am Übergang | 93.4267 mV | 92.2633 mV |
+| ec_baseline_5m am Übergang | 89.6133 mV | 88.7000 mV |
+| ec_rise_from_baseline am Übergang | 3.8133 mV | 3.5633 mV |
+| dT/dt am Übergang | 1.665 °C/min | 3.075 °C/min |
+| vapor_temp am Übergang | 71.54 °C | 77.05 °C |
+| VORLAUF_AUSKLANG unverändert | 14:06:00 | 16:46:20 |
+| MITTELLAUF unverändert | 14:07:40 | 16:48:00 |
 
-Zusätzliche Qualitätsüberlagerungen im ersten Verlauf:
-SENSOR_UNGUELTIG 13:37:40–13:50:40 und 15:21:00–15:42:40; danach Wiederaufnahme
-der zuvor gehaltenen physischen Phase. Daher wird BEREIT nicht schon in einem
-Fenster mit fehlender/ungültiger Sensorik bestätigt.
+Die kleinen numerischen Abweichungen von der vorgelagerten Analyse entstehen,
+weil der Analyzer die Mittel erneut aus gerundeten exportierten EC-Buckets
+berechnet, statt bereits gerundete exportierte EC-Mittel einzulesen.
 
-Der erste Aufheizbeginn ist besonders vorsichtig zu interpretieren: Der Export
-beginnt bereits mit 34 °C und positivem Gradienten, danach folgt gegen 13:02 ein
-starker Temperatursprung nach unten. Der CSV-Ausschnitt alleine beweist nicht,
-ob die erste Bewegung schon zum Brand gehörte. Es wurde keine Sonderregel auf
-bekannte Referenzzeiten gefittet. Bisherige Aufheiz-Anzeige im identischen
-Export-Replay: 13:59:40 bzw. 16:40:20; die neue positive Dynamik wird früher
-sichtbar. Vorlauf- und Nachlauf-Zeitpunkte bleiben in beiden Verläufen exakt
-gleich. Die exportierten booleschen Alarme stimmen in allen 1183 Punkten mit
-dem Replay überein. Im direkten Vergleich mit dem vorherigen Analyzer gibt es
-keine Abweichung in CUSUM-Details, Score, Alarm oder internem ended-Flag.
+Keine frühere gültige Auslösung während AUFHEIZEN. Die frühen Zwetschke-Werte
+über 200 mV zwischen 13:37:40 und 13:50:20 sind SENSOR_UNGUELTIG und leeren das
+EC-Baselinefenster; anschließend ist erst um 13:55:40 wieder eine vollständige
+Baseline vorhanden. 3.30 V am PT1000 ist ebenfalls nach bestehender Prüfung
+ungültig (initial bis 13:36:20 und erneut ab 18:35:40). Daher weicht der im
+verfügbaren Export rekonstruierte erste Aufheizbeginn von der früheren
+PT-Annahme ab. Dies ist keine Änderung an BEREIT → AUFHEIZEN.
+
+Im direkten Vergleich mit dem vorherigen Fenster-Kollaps-Analyzer auf exakt
+denselben 1041 Eingängen ändern sich ausschließlich die VORLAUF-Zeitpunkte
+(vorher 14:04:20 / 16:44:40). Ausklang, Mittellauf, Nachlauf und Abkühlung sowie
+CUSUM-Details, Score, Alarm und internes ended-Flag bleiben identisch.
+Keine Referenzuhrzeit ist im Analyzer hart codiert.
 
 ### Kompatibilität und echter Rebuild
 
