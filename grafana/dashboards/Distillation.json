@@ -150,7 +150,7 @@
         "type": "postgres",
         "uid": "P44368ADAD746BC27"
       },
-      "description": "Letzter gespeicherter Prozesszustand im gewählten Zeitraum. In der Live-Ansicht stammt er aus dem letzten abgeschlossenen Analyse-Bucket.",
+      "description": "Letzter gespeicherter Prozesszustand, unabhängig vom gewählten Diagramm-Zeitraum. Keine eigene State-Berechnung.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -160,14 +160,14 @@
             {
               "type": "value",
               "options": {
-                "IDLE": {
-                  "text": "IDLE",
+                "BEREIT": {
+                  "text": "BEREIT",
                   "color": "gray",
                   "index": 0
                 },
                 "AUFHEIZEN": {
                   "text": "AUFHEIZEN",
-                  "color": "yellow",
+                  "color": "orange",
                   "index": 1
                 },
                 "VORLAUF": {
@@ -187,27 +187,27 @@
                 },
                 "NACHLAUF_ENTWICKELT": {
                   "text": "NACHLAUF_ENTWICKELT",
-                  "color": "orange",
+                  "color": "yellow",
                   "index": 5
                 },
-                "NACHLAUF_WAHRSCHEINLICH": {
-                  "text": "NACHLAUF_WAHRSCHEINLICH",
+                "NACHLAUF": {
+                  "text": "NACHLAUF",
                   "color": "red",
                   "index": 6
+                },
+                "ABKÜHLEN": {
+                  "text": "ABKÜHLEN",
+                  "color": "#7B9EAF",
+                  "index": 7
                 },
                 "DATENLUECKE": {
                   "text": "DATENLUECKE",
                   "color": "purple",
-                  "index": 7
+                  "index": 8
                 },
                 "SENSOR_UNGUELTIG": {
                   "text": "SENSOR_UNGUELTIG",
                   "color": "dark-red",
-                  "index": 8
-                },
-                "ENDE": {
-                  "text": "ENDE",
-                  "color": "gray",
                   "index": 9
                 }
               }
@@ -228,11 +228,11 @@
       "interval": "1m",
       "options": {
         "reduceOptions": {
-          "values": false,
+          "values": true,
           "calcs": [
             "lastNotNull"
           ],
-          "fields": ""
+          "fields": "Prozessstatus"
         },
         "orientation": "auto",
         "textMode": "value",
@@ -251,7 +251,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT time, process_state AS \"Prozessstatus\" FROM process_analysis WHERE $__timeFilter(time) AND detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time DESC LIMIT 1;",
+          "rawSql": "SELECT time, process_state AS \"Prozessstatus\" FROM process_analysis WHERE detector_name = ${analysis_detector:sqlstring} AND algo_version = ${analysis_version:sqlstring} ORDER BY time DESC LIMIT 1;",
           "refId": "A"
         }
       ],
@@ -305,14 +305,14 @@
             {
               "type": "value",
               "options": {
-                "IDLE": {
-                  "text": "IDLE",
+                "BEREIT": {
+                  "text": "BEREIT",
                   "color": "gray",
                   "index": 0
                 },
                 "AUFHEIZEN": {
                   "text": "AUFHEIZEN",
-                  "color": "yellow",
+                  "color": "orange",
                   "index": 1
                 },
                 "VORLAUF": {
@@ -332,27 +332,27 @@
                 },
                 "NACHLAUF_ENTWICKELT": {
                   "text": "NACHLAUF_ENTWICKELT",
-                  "color": "orange",
+                  "color": "yellow",
                   "index": 5
                 },
-                "NACHLAUF_WAHRSCHEINLICH": {
-                  "text": "NACHLAUF_WAHRSCHEINLICH",
+                "NACHLAUF": {
+                  "text": "NACHLAUF",
                   "color": "red",
                   "index": 6
+                },
+                "ABKÜHLEN": {
+                  "text": "ABKÜHLEN",
+                  "color": "#7B9EAF",
+                  "index": 7
                 },
                 "DATENLUECKE": {
                   "text": "DATENLUECKE",
                   "color": "purple",
-                  "index": 7
+                  "index": 8
                 },
                 "SENSOR_UNGUELTIG": {
                   "text": "SENSOR_UNGUELTIG",
                   "color": "dark-red",
-                  "index": 8
-                },
-                "ENDE": {
-                  "text": "ENDE",
-                  "color": "gray",
                   "index": 9
                 }
               }
@@ -2157,7 +2157,8 @@
         "current": {
           "text": "cusum",
           "value": "cusum"
-        }
+        },
+        "hide": 2
       },
       {
         "name": "analysis_version",
@@ -2174,7 +2175,8 @@
         "current": {
           "text": "cusum-v1",
           "value": "cusum-v1"
-        }
+        },
+        "hide": 2
       }
     ]
   },

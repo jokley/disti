@@ -30,6 +30,10 @@ class ProcessAnalyzer:
         self.alarm = False
         self.features = FeatureCalculator(self.config)
         self._reset_heads()
+        self.process_state = State.BEREIT
+        self.recent_temperatures = deque()
+        self.quiet_gradients = deque()
+        self._break_lifecycle_persistence()
 
     def _start(self):
         self.active, self.ended = True, False
@@ -103,6 +107,67 @@ class ProcessAnalyzer:
                 self.heads_middle_since = None
         return self.heads_state
 
+    def _break_lifecycle_persistence(self):
+        self.heating_since = self.cooling_since = self.quiet_since = None
+        self.recent_temperatures.clear()
+        self.quiet_gradients.clear()
+
+    def _quiet_ready(self, time, slope):
+        c = self.config
+        if self.quiet_since is None:
+            self.quiet_since = time
+        self.quiet_gradients.append((time, abs(slope)))
+        while (time-self.quiet_gradients[0][0]).total_seconds() >= c.ready_window_seconds:
+            self.quiet_gradients.popleft()
+        values = [value for _, value in self.quiet_gradients]
+        return ((time-self.quiet_since).total_seconds() >= c.ready_window_seconds and
+                median(values) <= c.ready_median_abs_dtdt_max and
+                sum(value <= c.ready_bucket_abs_dtdt_max for value in values)/len(values)
+                >= c.ready_required_fraction)
+
+    def _lifecycle_state(self, point, features, detector_state):
+        """Physical operating phase; the detector keeps its existing lifecycle."""
+        c, time, slope = self.config, point.time, features.dtdt
+        self.recent_temperatures.append((time, point.vapor_temp))
+        while (time-self.recent_temperatures[0][0]).total_seconds() >= c.cooling_peak_window_seconds:
+            self.recent_temperatures.popleft()
+        if slope is None:
+            self.heating_since = self.cooling_since = self.quiet_since = None
+            self.quiet_gradients.clear()
+            return self.process_state
+        if self.process_state == State.ABKUEHLEN:
+            if self._quiet_ready(time, slope):
+                self.process_state = State.BEREIT
+                self._break_lifecycle_persistence()
+            return self.process_state
+        if self.process_state == State.NACHLAUF:
+            drop = max(temp for _, temp in self.recent_temperatures)-point.vapor_temp
+            if slope <= c.cooling_dtdt_max:
+                if self.cooling_since is None:
+                    self.cooling_since = time
+                if ((time-self.cooling_since).total_seconds() >= c.cooling_persistence_seconds and
+                        drop >= c.cooling_temperature_drop):
+                    self.process_state = State.ABKUEHLEN
+                    self.quiet_since = None
+                    self.quiet_gradients.clear()
+            else:
+                self.cooling_since = None
+            return self.process_state
+        if detector_state in (State.NACHLAUF_ENTWICKELT, State.NACHLAUF):
+            self.process_state = detector_state
+        elif self.process_state == State.BEREIT:
+            if slope > c.heating_start_dtdt_min:
+                if self.heating_since is None:
+                    self.heating_since = time
+                if (time-self.heating_since).total_seconds() >= c.heating_start_persistence_seconds:
+                    self.process_state = State.AUFHEIZEN
+                    self.heating_since = None
+            else:
+                self.heating_since = None
+        elif detector_state in (State.VORLAUF, State.VORLAUF_AUSKLANG, State.MITTELLAUF):
+            self.process_state = detector_state
+        return self.process_state
+
     def update(self, point: AnalysisInput) -> AnalysisResult:
         c = self.config
         if point.time.tzinfo is None:
@@ -119,19 +184,21 @@ class ProcessAnalyzer:
         invalid |= point.pt_raw_mv is not None and abs(point.pt_raw_mv-c.pt_disconnect_mv) <= c.pt_disconnect_tolerance_mv
         if gap or missing:
             self._break_heads_persistence()
+            self._break_lifecycle_persistence()
             self.features.reset()
             self.plateau_count = 0
             self.invalid_since = None
-            state = State.ENDE if self.ended else State.DATENLUECKE
+            state = State.DATENLUECKE
         elif invalid:
             self._break_heads_persistence()
+            self._break_lifecycle_persistence()
             self.features.reset()
             self.plateau_count = 0
             if self.invalid_since is None:
                 self.invalid_since = point.time
             if self.active and (point.time-self.invalid_since).total_seconds() >= c.invalid_sensor_duration_seconds:
                 self._end()
-            state = State.ENDE if self.ended else State.SENSOR_UNGUELTIG
+            state = State.SENSOR_UNGUELTIG
         else:
             self.invalid_since = None
             t = point.vapor_temp
@@ -144,7 +211,7 @@ class ProcessAnalyzer:
                 if t < c.start_temperature:
                     self.restart_armed = True
             f = self.features.update(point)
-            state = State.ENDE if self.ended else State.IDLE
+            state = State.BEREIT
             if self.active:
                 self.tmax = max(t, self.tmax if self.tmax is not None else t)
                 plateau = f.dtdt is not None and t >= c.start_temperature and f.dtdt < c.plateau_dtdt_max
@@ -180,7 +247,8 @@ class ProcessAnalyzer:
                         elif self.s < c.cusum_alarm_off:
                             self.alarm = False
                 if self.alarm:
-                    state = State.NACHLAUF_WAHRSCHEINLICH if t >= c.probable_tail_temperature else State.NACHLAUF_ENTWICKELT
+                    state = State.NACHLAUF if t >= c.probable_tail_temperature else State.NACHLAUF_ENTWICKELT
+            state = self._lifecycle_state(point, f, state)
         sigma = max(math.sqrt(self.var), c.sigma_min_mv) if self.var is not None else None
         details = DetectorDetails(self.mu, self.var, sigma, self.baseline_samples, self.baseline_frozen, z, self.s,
                                   (point.time-self.plateau_time).total_seconds() if self.plateau_time else None)

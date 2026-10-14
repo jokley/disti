@@ -198,3 +198,30 @@ def test_sensor_quality_error_is_analyzed_without_stopping_worker(analysis_repo)
     assert rows(analysis_repo)[5]['process_state']=='SENSOR_UNGUELTIG'
     assert rows(analysis_repo)[6]['process_state']!='SENSOR_UNGUELTIG'
     assert w.tick()==0
+
+
+def test_two_complete_operating_cycles_survive_restart_during_cooling(analysis_repo):
+    for sensor in ('vapor-temp','ec-1','ec-temp'): analysis_repo.ensure_sensor(sensor,sensor,'test')
+    temperatures=([30]*12+[30+.1*i for i in range(1,17)]+
+                  [31.6+1.68*i for i in range(1,31)]+[82]*73+
+                  [85]*5+[86]*5+[86-2*i for i in range(1,29)]+[30]*22)
+    count=len(temperatures)
+    for i,temp in enumerate(temperatures*2):
+        mv=120 if 131 <= i%count <= 140 else 100
+        for sensor,value,raw in [('vapor-temp',temp,None),('ec-1',1,mv),('ec-temp',40,1000)]:
+            analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',value,'test',timestamp=p(i).time,raw_mv=raw))
+    raw_before=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
+    assert worker(analysis_repo,155*20).tick()==155
+    assert rows(analysis_repo)[-1]['process_state']=='ABKÜHLEN'
+    assert worker(analysis_repo,count*20).tick()==count-155
+    assert rows(analysis_repo)[-1]['process_state']=='BEREIT'
+    assert worker(analysis_repo,2*count*20).tick()==count
+    live=rows(analysis_repo)
+    for start in (0,count):
+        states=[r['process_state'] for r in live[start:start+count]]
+        sequence=[state for i,state in enumerate(states) if i==0 or state!=states[i-1]]
+        assert sequence==['BEREIT','AUFHEIZEN','VORLAUF','VORLAUF_AUSKLANG','MITTELLAUF',
+                          'NACHLAUF_ENTWICKELT','NACHLAUF','ABKÜHLEN','BEREIT']
+    AnalysisService(analysis_repo).rebuild(T,p(2*count).time)
+    assert rows(analysis_repo)==live
+    assert analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')==raw_before
