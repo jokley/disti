@@ -31,11 +31,13 @@ class ProcessAnalyzer:
         self.features = FeatureCalculator(self.config)
         self._reset_heads()
         self.process_state = State.BEREIT
+        self._reset_vorlauf_ec()
         self.recent_temperatures = deque()
         self.quiet_gradients = deque()
         self._break_lifecycle_persistence()
 
     def _start(self):
+        heads_started = self.process_state == State.VORLAUF
         self.active, self.ended = True, False
         self.tmax = self.plateau_time = None
         self.plateau_count = self.baseline_samples = 0
@@ -44,6 +46,8 @@ class ProcessAnalyzer:
         self.s, self.alarm = 0.0, False
         self.features.reset()
         self._reset_heads()
+        if heads_started:
+            self.heads_state = State.VORLAUF
 
     def _end(self):
         self.active, self.ended, self.restart_armed = False, True, False
@@ -79,14 +83,6 @@ class ProcessAnalyzer:
         if slope >= c.heating_detect_dtdt_min:
             self.heating_seen = True
         if self.heads_state == State.AUFHEIZEN:
-            if not self.heating_seen or slope > c.vorlauf_start_dtdt_max:
-                self.heads_start_since = None
-            else:
-                if self.heads_start_since is None:
-                    self.heads_start_since = time
-                if (time-self.heads_start_since).total_seconds() >= c.vorlauf_start_persistence_seconds:
-                    self.heads_state = State.VORLAUF
-                    self.heads_start_since = None
             return self.heads_state
         values = [value for _, value in self.heads_dtdt]
         stable = ((time-self.heads_contiguous_start).total_seconds() >= c.vorlauf_ausklang_window_seconds and
@@ -106,6 +102,54 @@ class ProcessAnalyzer:
                 self.heads_state = State.MITTELLAUF
                 self.heads_middle_since = None
         return self.heads_state
+
+    def _reset_vorlauf_ec(self):
+        self.ec_start_history = deque()
+        self.ec_start_since = None
+        self.ec_baseline_5m = self.ec_rise_from_baseline = None
+        self.strong_heating_seen = False
+        self.strong_heating_since = None
+
+    def _break_vorlauf_ec_window(self):
+        self.ec_start_history.clear()
+        self.ec_start_since = None
+        self.ec_baseline_5m = self.ec_rise_from_baseline = None
+
+    def _vorlauf_ec_start(self, time, features):
+        """Prior-window EC median, independent of detector/baseline resets.
+
+        The baseline covers [time-window, time), excluding the current mean.
+        Only contiguous, quality-checked observations enter this history.
+        """
+        c, current = self.config, features.raw_mv_1m
+        if current is None or not math.isfinite(current):
+            self._break_vorlauf_ec_window()
+            return False
+        window = c.vorlauf_ec_baseline_window_seconds
+        while self.ec_start_history and (time-self.ec_start_history[0][0]).total_seconds() > window:
+            self.ec_start_history.popleft()
+        full = (bool(self.ec_start_history) and
+                (time-self.ec_start_history[0][0]).total_seconds() == window)
+        self.ec_baseline_5m = median(value for _, value in self.ec_start_history) if full else None
+        self.ec_rise_from_baseline = current-self.ec_baseline_5m if full else None
+        self.ec_start_history.append((time, current))
+        if self.process_state != State.AUFHEIZEN:
+            self.ec_start_since = None
+            return False
+        if features.dtdt is not None and features.dtdt >= c.heating_detect_dtdt_min:
+            if not self.strong_heating_seen:
+                self.strong_heating_since = time
+            self.strong_heating_seen = True
+        if (not self.strong_heating_seen or self.ec_rise_from_baseline is None or
+                self.ec_rise_from_baseline < c.vorlauf_ec_rise_threshold_mv):
+            self.ec_start_since = None
+            return False
+        if self.ec_start_since is None:
+            self.ec_start_since = time
+        if (time-self.ec_start_since).total_seconds() < c.vorlauf_ec_rise_persistence_seconds:
+            return False
+        self.heads_state = State.VORLAUF
+        return True
 
     def _break_lifecycle_persistence(self):
         self.heating_since = self.cooling_since = self.quiet_since = None
@@ -161,6 +205,11 @@ class ProcessAnalyzer:
                     self.heating_since = time
                 if (time-self.heating_since).total_seconds() >= c.heating_start_persistence_seconds:
                     self.process_state = State.AUFHEIZEN
+                    self.strong_heating_seen = False
+                    self.strong_heating_since = None
+                    self.ec_start_since = None
+                    self.heads_state = State.AUFHEIZEN
+                    self.heads_start_since = None
                     self.heating_since = None
             else:
                 self.heating_since = None
@@ -185,6 +234,7 @@ class ProcessAnalyzer:
         if gap or missing:
             self._break_heads_persistence()
             self._break_lifecycle_persistence()
+            self._break_vorlauf_ec_window()
             self.features.reset()
             self.plateau_count = 0
             self.invalid_since = None
@@ -192,6 +242,7 @@ class ProcessAnalyzer:
         elif invalid:
             self._break_heads_persistence()
             self._break_lifecycle_persistence()
+            self._break_vorlauf_ec_window()
             self.features.reset()
             self.plateau_count = 0
             if self.invalid_since is None:
@@ -248,6 +299,10 @@ class ProcessAnalyzer:
                             self.alarm = False
                 if self.alarm:
                     state = State.NACHLAUF if t >= c.probable_tail_temperature else State.NACHLAUF_ENTWICKELT
+            ec_start = self._vorlauf_ec_start(point.time, f)
+            if ec_start and state not in (State.NACHLAUF_ENTWICKELT, State.NACHLAUF):
+                state = State.VORLAUF
+                self.process_state = State.VORLAUF
             state = self._lifecycle_state(point, f, state)
         sigma = max(math.sqrt(self.var), c.sigma_min_mv) if self.var is not None else None
         details = DetectorDetails(self.mu, self.var, sigma, self.baseline_samples, self.baseline_frozen, z, self.s,

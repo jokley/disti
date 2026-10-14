@@ -129,8 +129,8 @@ def test_loop_logs_temporary_db_error_waits_then_retries(analysis_repo,monkeypat
 def test_restart_preserves_long_frozen_baseline_cusum_and_temperature_stages(analysis_repo):
     for sensor in ('vapor-temp','ec-1','ec-temp'): analysis_repo.ensure_sensor(sensor,sensor,'test')
     for i in range(180):
-        temp=76+i*.5 if i<6 else 78.5 if i<100 else 85
-        mv=100 if i<100 else 112
+        temp=76+i*.5 if i<14 else 82.5 if i<100 else 85
+        mv=100 if i<25 else 104 if i<100 else 112
         for sensor,value,raw in [('vapor-temp',temp,None),('ec-1',1,mv),('ec-temp',40,1000)]:
             analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',value,'test',timestamp=p(i).time,raw_mv=raw))
     w=worker(analysis_repo,3000)
@@ -207,7 +207,7 @@ def test_two_complete_operating_cycles_survive_restart_during_cooling(analysis_r
                   [85]*5+[86]*5+[86-2*i for i in range(1,29)]+[30]*22)
     count=len(temperatures)
     for i,temp in enumerate(temperatures*2):
-        mv=120 if 131 <= i%count <= 140 else 100
+        mv=120 if 131 <= i%count <= 140 else 104 if 48 <= i%count <= 130 else 100
         for sensor,value,raw in [('vapor-temp',temp,None),('ec-1',1,mv),('ec-temp',40,1000)]:
             analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',value,'test',timestamp=p(i).time,raw_mv=raw))
     raw_before=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
@@ -225,3 +225,26 @@ def test_two_complete_operating_cycles_survive_restart_during_cooling(analysis_r
     AnalysisService(analysis_repo).rebuild(T,p(2*count).time)
     assert rows(analysis_repo)==live
     assert analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')==raw_before
+
+
+def test_restart_restores_ec_baseline_and_unfinished_contact_persistence(analysis_repo):
+    for sensor in ('vapor-temp','ec-1','ec-temp'):
+        analysis_repo.ensure_sensor(sensor,sensor,'test')
+    for i in range(45):
+        temp=76+i*.5 if i<14 else 82.5
+        mv=100 if i<25 else 104
+        for sensor,value,raw in [('vapor-temp',temp,None),('ec-1',1,mv),('ec-temp',40,1000)]:
+            analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',value,'test',timestamp=p(i).time,raw_mv=raw))
+    first=worker(analysis_repo,28*20)
+    assert first.tick()==28
+    assert first.analyzer.process_state.value=='AUFHEIZEN'
+    assert first.analyzer.ec_start_since==p(26).time
+    assert first.analyzer.ec_baseline_5m==100
+    resumed=worker(analysis_repo,29*20)
+    assert resumed.tick()==1
+    assert rows(analysis_repo)[-1]['process_state']=='VORLAUF'
+    assert rows(analysis_repo)[-1]['time']==p(28).time.isoformat()
+    assert worker(analysis_repo,45*20).tick()==16
+    live=rows(analysis_repo)
+    AnalysisService(analysis_repo).rebuild(T,p(45).time)
+    assert rows(analysis_repo)==live

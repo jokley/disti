@@ -39,12 +39,11 @@ def test_real_slow_rise_starts_before_strong_heating_without_absolute_gate(base)
 
 
 def test_original_heads_windows_and_confirmation_are_retained():
-    a,f=lifecycle(fast())
+    a,f=lifecycle(fast(),phase=S.VORLAUF)
+    a.heads_state=S.VORLAUF
     states=[]
     for i in range(14): states.append(slope_point(a,f,i,2 if i<4 else 0).process_state)
-    assert states[:3]==[S.BEREIT]*3
-    assert states[3:6]==[S.AUFHEIZEN]*3
-    assert states[6:8]==[S.VORLAUF]*2
+    assert states[:8]==[S.VORLAUF]*8
     assert states[8:13]==[S.VORLAUF_AUSKLANG]*5
     assert states[13]==S.MITTELLAUF
     assert slope_point(a,f,14,0,t=85,mv=130).process_state==S.NACHLAUF_ENTWICKELT

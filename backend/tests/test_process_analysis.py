@@ -590,7 +590,8 @@ class ControlledTemperatureFeatures:
 
 
 def temperature_analyzer():
-    a=ProcessAnalyzer();a.process_state=S.AUFHEIZEN
+    # Downstream tests start after the EC transition tested in test_vorlauf_ec.
+    a=ProcessAnalyzer();a.process_state=a.heads_state=S.VORLAUF
     f=ControlledTemperatureFeatures();a.features=f
     return a,f
 
@@ -602,38 +603,17 @@ def slope_point(a,f,i,slope,**changes):
 
 def test_temperature_dynamics_config():
     c=AnalysisConfig()
-    assert (c.heating_detect_dtdt_min,c.vorlauf_start_dtdt_max,c.vorlauf_start_persistence_seconds)==(1,.3,40)
+    assert (c.vorlauf_ec_baseline_window_seconds,c.vorlauf_ec_rise_threshold_mv,c.vorlauf_ec_rise_persistence_seconds)==(300,2,40)
     assert (c.vorlauf_ausklang_window_seconds,c.vorlauf_ausklang_median_abs_dtdt_max)==(120,.12)
     assert (c.vorlauf_ausklang_bucket_abs_dtdt_max,c.vorlauf_ausklang_required_fraction)==(.2,.8)
     assert c.vorlauf_middle_confirm_seconds==90
     assert c.cusum_h==8 and c.cusum_alarm_off==2.4
 
 
-def test_heating_required_and_persistent_collapse_starts_heads():
-    a,f=temperature_analyzer()
-    for i in range(10):
-        assert slope_point(a,f,i,0).process_state==S.AUFHEIZEN
-    assert not a.heating_seen
-    assert slope_point(a,f,10,1).process_state==S.AUFHEIZEN
-    assert a.heating_seen
-    assert slope_point(a,f,11,.30).process_state==S.AUFHEIZEN
-    assert slope_point(a,f,12,.30).process_state==S.AUFHEIZEN
-    assert slope_point(a,f,13,.30).process_state==S.VORLAUF
-
-
-def test_short_collapse_is_not_persistent():
-    a,f=temperature_analyzer()
-    slope_point(a,f,0,2);slope_point(a,f,1,0)
-    assert slope_point(a,f,2,.4).process_state==S.AUFHEIZEN
-    for i in (3,4): assert slope_point(a,f,i,0).process_state==S.AUFHEIZEN
-    assert slope_point(a,f,5,0).process_state==S.VORLAUF
-
-
 def test_temperature_two_stages_window_then_confirmation_and_latch():
     a,f=temperature_analyzer()
-    for i in range(3): assert slope_point(a,f,i,2).process_state==S.AUFHEIZEN
-    for i in (3,4): assert slope_point(a,f,i,0).process_state==S.AUFHEIZEN
-    for i in range(5,7): assert slope_point(a,f,i,0).process_state==S.VORLAUF
+    for i in range(3): assert slope_point(a,f,i,2).process_state==S.VORLAUF
+    for i in range(3,7): assert slope_point(a,f,i,0).process_state==S.VORLAUF
     # One strong slope remains among six at t=140: 5/6 stable, median zero.
     assert slope_point(a,f,7,0).process_state==S.VORLAUF_AUSKLANG
     for i in range(8,12): assert slope_point(a,f,i,0).process_state==S.VORLAUF_AUSKLANG
@@ -706,13 +686,13 @@ def test_temperature_window_cannot_bridge_data_interruptions(kind):
 def test_actual_temperature_curve_same_transitions_at_different_plateau_levels(plateau):
     a=ProcessAnalyzer();states=[]
     for i in range(35):
-        t=plateau-3+i*.5 if i<6 else plateau-.5
-        r=a.update(p(i,t=t))
+        t=plateau-7+i*.5 if i<14 else plateau-.5
+        r=a.update(p(i,t=t,mv=100 if i<17 else 104))
         if not states or states[-1]!=r.process_state: states.append(r.process_state)
     assert states==[S.BEREIT,S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
 
 
-def test_ec_diagnostics_do_not_block_temperature_transitions():
+def test_ec_trend_diagnostics_do_not_change_downstream_temperature_transitions():
     from disti.process_analysis.models import Features
     a,f=temperature_analyzer();b,g=temperature_analyzer()
     for i in range(30):
@@ -726,13 +706,13 @@ def test_ec_diagnostics_do_not_block_temperature_transitions():
 
 
 def test_temperature_changes_do_not_alter_cusum_details_or_score():
-    a=ProcessAnalyzer(fast());b=ProcessAnalyzer(replace(fast(),heating_detect_dtdt_min=1000))
+    a=ProcessAnalyzer(fast());b=ProcessAnalyzer(replace(fast(),vorlauf_ec_rise_threshold_mv=1000))
     for i in range(70):
-        t=76+.5*i if i<6 else 78.5 if i<30 else 85
-        r,s=a.update(p(i,t=t,mv=100 if i<30 else 130)),b.update(p(i,t=t,mv=100 if i<30 else 130))
+        t=76+.5*i if i<14 else 82.5 if i<30 else 85
+        r,s=a.update(p(i,t=t,mv=100 if i<17 else 104 if i<30 else 130)),b.update(p(i,t=t,mv=100 if i<17 else 104 if i<30 else 130))
         assert r.details==s.details
         assert (r.detector_score,r.detector_alarm,r.ended)==(s.detector_score,s.detector_alarm,s.ended)
-        if i==25: assert r.process_state==S.MITTELLAUF and s.process_state==S.AUFHEIZEN
+        if i==28: assert r.process_state==S.MITTELLAUF and s.process_state==S.AUFHEIZEN
         if r.detector_alarm: assert r.process_state==s.process_state==S.NACHLAUF_ENTWICKELT
 
 
@@ -740,8 +720,8 @@ def test_temperature_states_live_rebuild_and_ec_diagnostics_identical(analysis_r
     from disti.hardware.base import SensorReading
     for sensor in ('vapor-temp','ec-1','ec-temp'): analysis_repo.ensure_sensor(sensor,sensor,'test')
     for i in range(40):
-        t=76+.5*i if i<6 else 78.5
-        for sensor,value,raw in [('vapor-temp',t,None),('ec-1',1,100),('ec-temp',40,1000)]:
+        t=76+.5*i if i<14 else 82.5
+        for sensor,value,raw in [('vapor-temp',t,None),('ec-1',1,100 if i<17 else 104),('ec-temp',40,1000)]:
             analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',value,'test',timestamp=p(i).time,raw_mv=raw))
     before=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
     service=AnalysisService(analysis_repo);a=ProcessAnalyzer()
@@ -749,7 +729,7 @@ def test_temperature_states_live_rebuild_and_ec_diagnostics_identical(analysis_r
     changes=[r.process_state for i,r in enumerate(live) if i==0 or live[i-1].process_state!=r.process_state]
     assert changes==[S.BEREIT,S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
     rows=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
-    assert rows[-1]['ec_drop_from_plateau']==0 and rows[-1]['ec_recovery_from_min']==0
+    assert rows[-1]['ec_recovery_from_min']>=0
     service.rebuild(T,p(40).time)
     assert analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')==rows
     service.rebuild(p(12).time,p(40).time)

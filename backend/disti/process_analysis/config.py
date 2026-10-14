@@ -44,8 +44,9 @@ class AnalysisConfig:
     ready_bucket_abs_dtdt_max: float = 0.20
     ready_required_fraction: float = 0.80
     heating_detect_dtdt_min: float = 1.0
-    vorlauf_start_dtdt_max: float = 0.30
-    vorlauf_start_persistence_seconds: int = 40
+    vorlauf_ec_baseline_window_seconds: int = 300
+    vorlauf_ec_rise_threshold_mv: float = 2.0
+    vorlauf_ec_rise_persistence_seconds: int = 40
     vorlauf_ausklang_window_seconds: int = 120
     vorlauf_ausklang_median_abs_dtdt_max: float = 0.12
     vorlauf_ausklang_bucket_abs_dtdt_max: float = 0.20
@@ -64,7 +65,7 @@ class AnalysisConfig:
             raise ValueError('invalid CUSUM parameters')
         if self.plateau_persistence < 1 or self.baseline_warmup_samples < 1:
             raise ValueError('persistence and warmup must be positive')
-        if self.vorlauf_start_persistence_seconds < 0 or self.vorlauf_middle_confirm_seconds < 0:
+        if self.vorlauf_ec_rise_persistence_seconds < 0 or self.vorlauf_middle_confirm_seconds < 0:
             raise ValueError('heads persistence must be nonnegative')
         if self.vorlauf_ausklang_window_seconds <= 0:
             raise ValueError('heads window must be positive')
@@ -78,3 +79,8 @@ class AnalysisConfig:
             raise ValueError('lifecycle windows and drop must be positive')
         if not 0 <= self.ready_required_fraction <= 1:
             raise ValueError('ready fraction must be between zero and one')
+        if (self.vorlauf_ec_baseline_window_seconds <= 0 or
+                self.vorlauf_ec_baseline_window_seconds % self.bucket_seconds != 0):
+            raise ValueError('EC baseline window must be a positive multiple of bucket seconds')
+        if not self.vorlauf_ec_rise_threshold_mv > 0:
+            raise ValueError('EC rise threshold must be positive')
