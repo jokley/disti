@@ -85,7 +85,8 @@ def test_quality_breaks_baseline_and_persistence(kind):
     kwargs={'mv':None} if kind=='missing' else {'invalid':True} if kind=='invalid' else {'mv':301} if kind=='ec_outlier' else {'pt':3300} if kind=='pt_disconnect' else {}
     index=3 if kind=='gap' else 2
     r=ec(a,f,index,104,**kwargs)
-    assert r.process_state in (S.DATENLUECKE,S.SENSOR_UNGUELTIG)
+    assert r.process_state==S.AUFHEIZEN
+    assert r.details.data_quality in ('DATENLUECKE','SENSOR_UNGUELTIG')
     assert not a.ec_start_history and a.ec_start_since is None
     for i in range(index+1,index+16):
         assert ec(a,f,i,104).process_state==S.AUFHEIZEN
@@ -104,7 +105,7 @@ def test_no_absolute_temperature_or_pt_cooling_condition_and_no_regression(tempe
 
 def test_next_process_discards_previous_strong_heating_and_persistence():
     a,f=analyzer();assert a.strong_heating_seen
-    a.process_state=S.BEREIT
+    a.process_state=S.INAKTIV
     for i in range(4):ec(a,f,i,100,.3)
     assert a.process_state==S.AUFHEIZEN and not a.strong_heating_seen
     for i in range(4,8):assert ec(a,f,i,104,.3).process_state==S.AUFHEIZEN
@@ -113,7 +114,7 @@ def test_next_process_discards_previous_strong_heating_and_persistence():
 
 def test_ec_baseline_can_warm_up_while_ready_without_triggering():
     a=ProcessAnalyzer();f=ControlledTemperatureFeatures();a.features=f
-    for i in range(18): assert ec(a,f,i,100,0).process_state==S.BEREIT
+    for i in range(18): assert ec(a,f,i,100,0).process_state==S.INAKTIV
     assert a.ec_baseline_5m==100 and not a.strong_heating_seen
 
 

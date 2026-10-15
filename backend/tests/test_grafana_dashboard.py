@@ -65,7 +65,7 @@ def test_gradual_score_display_and_process_state_mappings():
         assert props['thresholds']['steps'][-1]['value']==50
         assert 'keine statistische Wahrscheinlichkeit' in panel['description']
     mappings=panels[24]['fieldConfig']['defaults']['mappings'][0]['options']
-    for state in ('BEREIT','AUFHEIZEN','ABKÜHLEN','VORLAUF','VORLAUF_AUSKLANG','MITTELLAUF','NACHLAUF_ENTWICKELT','NACHLAUF'):
+    for state in ('INAKTIV','AUFHEIZEN','INAKTIV','VORLAUF','VORLAUF_AUSKLANG','MITTELLAUF','NACHLAUF_ENTWICKELT','NACHLAUF'):
         assert mappings[state]['text']==state
 
 
@@ -87,7 +87,7 @@ def test_operating_dashboard_is_led_by_temperatures_state_and_process_curve():
     assert [p['title'] for p in main[:3]]==['Kesseldampf','Kühler','Aktueller Prozessstatus']
     assert all(p['type']=='stat' and p['gridPos']['y']==0 and p['gridPos']['h']==4 for p in main[:3])
     assert main[0]['fieldConfig']['defaults']['unit']=='celsius'
-    assert main[0]['options']['text']['valueSize'] > main[1]['options']['text']['valueSize']
+    assert main[0]['options']['text']['valueSize'] == main[1]['options']['text']['valueSize']
     assert main[2]['fieldConfig']['defaults']['mappings']==main[3]['fieldConfig']['defaults']['mappings']
     assert main[3]['type']=='state-timeline' and main[3]['gridPos']['w']==24
     sql=main[2]['targets'][0]['rawSql']

@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 import logging
 
@@ -155,7 +156,8 @@ def test_restart_fills_empty_buckets_and_respects_detector_version(analysis_repo
     assert w.tick()==3
     current=[r for r in rows(analysis_repo) if r['algo_version']=='cusum-v1']
     assert len(current)==43
-    assert all(r['process_state']=='DATENLUECKE' for r in current[-3:])
+    assert all(json.loads(r['details'])['data_quality']=='DATENLUECKE' for r in current[-3:])
+    assert all(r['process_state']==current[-4]['process_state'] for r in current[-3:])
 
 
 def test_next_cycle_reads_only_new_bucket(analysis_repo,monkeypatch):
@@ -195,8 +197,9 @@ def test_sensor_quality_error_is_analyzed_without_stopping_worker(analysis_repo)
                            (p(5).time.isoformat(),),fetch=None)
     w=worker(analysis_repo,800)
     assert w.tick()==40
-    assert rows(analysis_repo)[5]['process_state']=='SENSOR_UNGUELTIG'
-    assert rows(analysis_repo)[6]['process_state']!='SENSOR_UNGUELTIG'
+    assert json.loads(rows(analysis_repo)[5]['details'])['data_quality']=='SENSOR_UNGUELTIG'
+    assert rows(analysis_repo)[5]['process_state']==rows(analysis_repo)[4]['process_state']
+    assert json.loads(rows(analysis_repo)[6]['details'])['data_quality']=='OK'
     assert w.tick()==0
 
 
@@ -212,16 +215,16 @@ def test_two_complete_operating_cycles_survive_restart_during_cooling(analysis_r
             analysis_repo.save_measurement(SensorReading(sensor,'temperature' if sensor!='ec-1' else 'conductivity',value,'test',timestamp=p(i).time,raw_mv=raw))
     raw_before=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
     assert worker(analysis_repo,155*20).tick()==155
-    assert rows(analysis_repo)[-1]['process_state']=='ABKÜHLEN'
+    assert rows(analysis_repo)[-1]['process_state']=='INAKTIV'
     assert worker(analysis_repo,count*20).tick()==count-155
-    assert rows(analysis_repo)[-1]['process_state']=='BEREIT'
+    assert rows(analysis_repo)[-1]['process_state']=='INAKTIV'
     assert worker(analysis_repo,2*count*20).tick()==count
     live=rows(analysis_repo)
     for start in (0,count):
         states=[r['process_state'] for r in live[start:start+count]]
         sequence=[state for i,state in enumerate(states) if i==0 or state!=states[i-1]]
-        assert sequence==['BEREIT','AUFHEIZEN','VORLAUF','VORLAUF_AUSKLANG','MITTELLAUF',
-                          'NACHLAUF_ENTWICKELT','NACHLAUF','ABKÜHLEN','BEREIT']
+        assert sequence==['INAKTIV','AUFHEIZEN','VORLAUF','VORLAUF_AUSKLANG','MITTELLAUF',
+                          'NACHLAUF_ENTWICKELT','NACHLAUF','INAKTIV']
     AnalysisService(analysis_repo).rebuild(T,p(2*count).time)
     assert rows(analysis_repo)==live
     assert analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')==raw_before

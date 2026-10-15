@@ -160,8 +160,8 @@
             {
               "type": "value",
               "options": {
-                "BEREIT": {
-                  "text": "BEREIT",
+                "INAKTIV": {
+                  "text": "INAKTIV",
                   "color": "gray",
                   "index": 0
                 },
@@ -194,21 +194,6 @@
                   "text": "NACHLAUF",
                   "color": "red",
                   "index": 6
-                },
-                "ABKÜHLEN": {
-                  "text": "ABKÜHLEN",
-                  "color": "#7B9EAF",
-                  "index": 7
-                },
-                "DATENLUECKE": {
-                  "text": "DATENLUECKE",
-                  "color": "purple",
-                  "index": 8
-                },
-                "SENSOR_UNGUELTIG": {
-                  "text": "SENSOR_UNGUELTIG",
-                  "color": "dark-red",
-                  "index": 9
                 }
               }
             }
@@ -305,8 +290,8 @@
             {
               "type": "value",
               "options": {
-                "BEREIT": {
-                  "text": "BEREIT",
+                "INAKTIV": {
+                  "text": "INAKTIV",
                   "color": "gray",
                   "index": 0
                 },
@@ -339,21 +324,6 @@
                   "text": "NACHLAUF",
                   "color": "red",
                   "index": 6
-                },
-                "ABKÜHLEN": {
-                  "text": "ABKÜHLEN",
-                  "color": "#7B9EAF",
-                  "index": 7
-                },
-                "DATENLUECKE": {
-                  "text": "DATENLUECKE",
-                  "color": "purple",
-                  "index": 8
-                },
-                "SENSOR_UNGUELTIG": {
-                  "text": "SENSOR_UNGUELTIG",
-                  "color": "dark-red",
-                  "index": 9
                 }
               }
             }
