@@ -17,11 +17,11 @@ def fast(**changes):
 
 def test_plateau_persistence_and_dt():
     a=ProcessAnalyzer()
-    assert a.update(p(0)).process_state==S.BEREIT
+    assert a.update(p(0)).process_state==S.INAKTIV
     for i in (1,2):
-        assert a.update(p(i)).process_state==S.BEREIT
+        assert a.update(p(i)).process_state==S.INAKTIV
     r=a.update(p(3))
-    assert r.process_state==S.BEREIT and r.features.dtdt==0
+    assert r.process_state==S.INAKTIV and r.features.dtdt==0
     assert a.plateau_time==p(3).time
 
 def test_temperature_slope_and_time_windows():
@@ -43,7 +43,7 @@ def test_baseline_delay_and_no_forced_middle():
     r=a.update(p(18))
     assert r.details.baseline_samples==1
     for i in range(19,60): r=a.update(p(i))
-    assert r.process_state==S.BEREIT
+    assert r.process_state==S.INAKTIV
     assert r.details.baseline_samples==42
     assert r.details.baseline_sigma==1.5
 
@@ -85,38 +85,38 @@ def test_gap_freezes_detector_and_breaks_plateau():
     for i in range(5): a.update(p(i))
     r=a.update(p(5,t=85,mv=115)); previous=asdict(r.details)
     r=a.update(p(7,t=86,mv=150))
-    assert r.process_state==S.DATENLUECKE
+    assert r.details.data_quality=='DATENLUECKE'
     assert r.details.cusum_s==previous['cusum_s'] and r.details.baseline_mu==previous['baseline_mu']
     assert r.features.dtdt is None
     r=a.update(p(8,t=None))
-    assert r.process_state==S.DATENLUECKE and not r.ended
+    assert r.details.data_quality=='DATENLUECKE' and not r.ended
     assert a.update(p(9,t=85)).features.dtdt is None
 
 def test_invalid_duration_and_gap_interrupts_timer():
     a=ProcessAnalyzer()
     a.update(p(0))
     for i in range(1,10):
-        assert a.update(p(i,mv=201)).process_state==S.SENSOR_UNGUELTIG
-    assert a.update(p(10,mv=201)).process_state==S.SENSOR_UNGUELTIG
+        assert a.update(p(i,mv=201)).details.data_quality=='SENSOR_UNGUELTIG'
+    assert a.update(p(10,mv=201)).details.data_quality=='SENSOR_UNGUELTIG'
     assert not a.alarm and a.s==0
     a=ProcessAnalyzer();a.update(p(0))
-    assert a.update(p(1,pt=3300)).process_state==S.SENSOR_UNGUELTIG
-    assert a.update(p(9,pt=None)).process_state==S.DATENLUECKE
-    assert a.update(p(10,pt=3300)).process_state==S.SENSOR_UNGUELTIG
+    assert a.update(p(1,pt=3300)).details.data_quality=='SENSOR_UNGUELTIG'
+    assert a.update(p(9,pt=None)).details.data_quality=='DATENLUECKE'
+    assert a.update(p(10,pt=3300)).details.data_quality=='SENSOR_UNGUELTIG'
 
 @pytest.mark.parametrize('temperature',[74,80.5])
 def test_end_restart_reset(temperature):
     a=ProcessAnalyzer();a.update(p(0))
     r=a.update(p(1,t=temperature))
-    assert r.ended and r.process_state==S.BEREIT and r.detector_score==0
+    assert r.ended and r.process_state==S.INAKTIV and r.detector_score==0
     if temperature>=75:
-        assert a.update(p(2)).process_state==S.BEREIT
+        assert a.update(p(2)).process_state==S.INAKTIV
         a.update(p(3,t=74)); i=4
     else: i=2
-    assert a.update(p(i)).process_state==S.BEREIT
+    assert a.update(p(i)).process_state==S.INAKTIV
     a.reset()
     assert a.last_time is None and a.mu is None and a.plateau_time is None
-    assert a.update(p(0)).process_state==S.BEREIT
+    assert a.update(p(0)).process_state==S.INAKTIV
 
 def test_order_and_no_future():
     a=ProcessAnalyzer();prefix=[a.update(p(i,mv=100+i)) for i in range(5)]
@@ -129,7 +129,7 @@ def test_order_and_no_future():
 def test_optional_strict_plateau():
     a=ProcessAnalyzer(replace(AnalysisConfig(),strict_plateau=True))
     for i in range(5): r=a.update(p(i,t=80))
-    assert r.process_state==S.BEREIT
+    assert r.process_state==S.INAKTIV
 
 def test_missing_bucket_generation():
     rows=[{'time':T,'vapor_temp':82,'raw_mv':100,'pt_raw_mv':1000},
@@ -182,8 +182,8 @@ def test_rebuild_route_validation_and_success(analysis_repo):
 def test_nonfinite_and_quality_invalid(analysis_repo):
     a=ProcessAnalyzer()
     r=a.update(p(0,mv=math.nan))
-    assert r.process_state==S.SENSOR_UNGUELTIG and r.raw_mv is None
-    assert a.update(p(1,invalid=True)).process_state==S.SENSOR_UNGUELTIG
+    assert r.details.data_quality=='SENSOR_UNGUELTIG' and r.raw_mv is None
+    assert a.update(p(1,invalid=True)).details.data_quality=='SENSOR_UNGUELTIG'
     rid=seed(analysis_repo)
     analysis_repo._execute("UPDATE sensor_measurements SET quality='simulated'",fetch=None)
     rows=analysis_repo.analysis_buckets(T+timedelta(seconds=800),20)
@@ -233,7 +233,7 @@ def test_baseline_uses_elapsed_buckets_without_gap_imputation():
     a=ProcessAnalyzer(fast())
     for i in range(5): a.update(p(i))
     mu,var,count=a.mu,a.var,a.baseline_samples
-    assert a.update(p(20)).process_state==S.DATENLUECKE
+    assert a.update(p(20)).details.data_quality=='DATENLUECKE'
     assert (a.mu,a.var,a.baseline_samples)==(mu,var,count)
     r=a.update(p(21,mv=102))
     alpha=1-0.5**(20/600)
@@ -250,7 +250,7 @@ def test_live_reads_one_bucket_and_matches_rebuild(analysis_repo):
     assert live==analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
     rows=analysis_repo.analysis_buckets(T+timedelta(seconds=40),20,start=T+timedelta(seconds=20))
     assert len(rows)==1 and rows[0]['time']==p(1).time
-    assert service.process_completed_bucket(analyzer,p(40).time).process_state==S.DATENLUECKE
+    assert service.process_completed_bucket(analyzer,p(40).time).details.data_quality=='DATENLUECKE'
 
 def test_alarm_holds_between_on_and_off_thresholds():
     a=ProcessAnalyzer(fast(sigma_min_mv=2))
@@ -421,7 +421,7 @@ def test_multiple_brands_live_replay_and_long_state_history(analysis_repo):
     live_results=[service.process_completed_bucket(analyzer,p(i).time) for i in range(180)]
     assert live_results[119].detector_alarm
     assert live_results[120].ended and live_results[120].detector_score==0
-    assert live_results[123].process_state==S.DATENLUECKE
+    assert live_results[123].details.data_quality=='DATENLUECKE'
     assert not live_results[130].ended
     assert live_results[130].details.baseline_mu is None
     assert live_results[179].details.baseline_mu==90
@@ -513,7 +513,7 @@ def test_plateau_reference_uses_existing_mean_and_is_causal():
         assert all(getattr(r.features,name) is None for name in (
             'ec_plateau_ref','ec_drop_from_plateau','ec_min_since_plateau','ec_recovery_from_min'))
     r=a.update(p(3,mv=97))
-    assert r.process_state==S.BEREIT
+    assert r.process_state==S.INAKTIV
     assert r.features.raw_mv_1m==98 and r.features.ec_plateau_ref==98
     assert r.features.ec_plateau_ref!=r.raw_mv
     assert r.features.ec_drop_from_plateau==0 and r.features.ec_recovery_from_min==0
@@ -541,7 +541,7 @@ def test_plateau_ec_reset_after_end_and_new_process():
     a=plateau_analyzer()
     for i in range(4,7): a.update(p(i,mv=97))
     r=a.update(p(7,t=70,mv=97))
-    assert r.process_state==S.BEREIT
+    assert r.process_state==S.INAKTIV
     assert a.ec_plateau_ref is None and a.ec_min_since_plateau is None
     assert r.features.ec_plateau_ref is None
     for i in range(8,11):
@@ -567,7 +567,7 @@ def test_plateau_reference_requires_confirmed_temperature_gate():
     a=ProcessAnalyzer()
     for i in range(20):
         r=a.update(p(i,t=76+i/2,mv=100-i))
-        assert r.process_state in (S.BEREIT,S.AUFHEIZEN) and r.features.ec_plateau_ref is None
+        assert r.process_state in (S.INAKTIV,S.AUFHEIZEN) and r.features.ec_plateau_ref is None
 
 
 
@@ -689,7 +689,7 @@ def test_actual_temperature_curve_same_transitions_at_different_plateau_levels(p
         t=plateau-7+i*.5 if i<14 else plateau-.5
         r=a.update(p(i,t=t,mv=100 if i<17 else 104))
         if not states or states[-1]!=r.process_state: states.append(r.process_state)
-    assert states==[S.BEREIT,S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
+    assert states==[S.INAKTIV,S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
 
 
 def test_ec_trend_diagnostics_do_not_change_downstream_temperature_transitions():
@@ -727,7 +727,7 @@ def test_temperature_states_live_rebuild_and_ec_diagnostics_identical(analysis_r
     service=AnalysisService(analysis_repo);a=ProcessAnalyzer()
     live=[service.process_completed_bucket(a,p(i).time) for i in range(40)]
     changes=[r.process_state for i,r in enumerate(live) if i==0 or live[i-1].process_state!=r.process_state]
-    assert changes==[S.BEREIT,S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
+    assert changes==[S.INAKTIV,S.AUFHEIZEN,S.VORLAUF,S.VORLAUF_AUSKLANG,S.MITTELLAUF]
     rows=analysis_repo._execute('SELECT * FROM process_analysis ORDER BY time')
     assert rows[-1]['ec_recovery_from_min']>=0
     service.rebuild(T,p(40).time)

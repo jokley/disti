@@ -37,6 +37,7 @@ class DetectorDetails:
     z: float | None
     cusum_s: float
     seconds_since_plateau: float | None
+    data_quality: str = 'OK'
 
 @dataclass(frozen=True)
 class AnalysisResult:

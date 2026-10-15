@@ -7,32 +7,32 @@ from disti.process_analysis import AnalysisConfig,ProcessAnalyzer,ProcessState a
 from test_process_analysis import T,p,fast,ControlledTemperatureFeatures,slope_point,analysis_repo,seed
 
 
-def lifecycle(config=None,phase=S.BEREIT):
+def lifecycle(config=None,phase=S.INAKTIV):
     a=ProcessAnalyzer(config or AnalysisConfig())
     a.process_state=phase
     f=ControlledTemperatureFeatures();a.features=f
     return a,f
 
 
-def test_operating_states_and_quality_overlays():
-    assert {s.value for s in S}=={'BEREIT','AUFHEIZEN','VORLAUF','VORLAUF_AUSKLANG','MITTELLAUF',
-        'NACHLAUF_ENTWICKELT','NACHLAUF','ABKÜHLEN','DATENLUECKE','SENSOR_UNGUELTIG'}
+def test_only_business_states_are_exposed():
+    assert {s.value for s in S}=={'INAKTIV','AUFHEIZEN','VORLAUF','VORLAUF_AUSKLANG',
+        'MITTELLAUF','NACHLAUF_ENTWICKELT','NACHLAUF'}
 
 
 def test_quiet_plant_is_ready_and_brief_positive_spike_is_ignored():
     a,f=lifecycle()
-    for i in range(15): assert slope_point(a,f,i,0,t=35).process_state==S.BEREIT
-    assert slope_point(a,f,15,.8,t=35).process_state==S.BEREIT
-    assert slope_point(a,f,16,0,t=35).process_state==S.BEREIT
-    for i in range(17,22): assert slope_point(a,f,i,.20,t=35).process_state==S.BEREIT
+    for i in range(15): assert slope_point(a,f,i,0,t=35).process_state==S.INAKTIV
+    assert slope_point(a,f,15,.8,t=35).process_state==S.INAKTIV
+    assert slope_point(a,f,16,0,t=35).process_state==S.INAKTIV
+    for i in range(17,22): assert slope_point(a,f,i,.20,t=35).process_state==S.INAKTIV
 
 
 @pytest.mark.parametrize('base',[20,55,80])
 def test_real_slow_rise_starts_before_strong_heating_without_absolute_gate(base):
     a=ProcessAnalyzer()
     results=[a.update(p(i,t=base+.1*i)) for i in range(10)]
-    assert results[0].process_state==S.BEREIT
-    assert results[3].process_state==S.BEREIT
+    assert results[0].process_state==S.INAKTIV
+    assert results[3].process_state==S.INAKTIV
     assert results[4].process_state==S.AUFHEIZEN
     assert results[4].features.dtdt==pytest.approx(.3)
     assert not a.heating_seen # below the unchanged 1.0 strong-heat threshold
@@ -76,11 +76,11 @@ def test_cooling_needs_both_persistent_negative_gradient_and_relative_drop():
     slope_point(a,f,0,0,t=90)
     for i in range(1,6):
         assert slope_point(a,f,i,-.6,t=90-.1*i).process_state==S.NACHLAUF
-    assert slope_point(a,f,6,-.6,t=87.9).process_state==S.ABKUEHLEN
+    assert slope_point(a,f,6,-.6,t=87.9).process_state==S.INAKTIV
     b,g=lifecycle(phase=S.NACHLAUF)
     slope_point(b,g,0,0,t=90)
     for i in range(1,4): assert slope_point(b,g,i,-.6,t=90-.6*i).process_state==S.NACHLAUF
-    assert slope_point(b,g,4,-.6,t=87.6).process_state==S.ABKUEHLEN
+    assert slope_point(b,g,4,-.6,t=87.6).process_state==S.INAKTIV
 
 
 def test_cooling_requires_recent_peak_not_old_process_maximum():
@@ -93,20 +93,12 @@ def test_cooling_requires_recent_peak_not_old_process_maximum():
 
 
 @pytest.mark.parametrize('temperature',[20,55,82])
-def test_cooling_becomes_ready_from_quiet_dynamics_at_any_temperature(temperature):
-    a,f=lifecycle(phase=S.ABKUEHLEN)
-    for i in range(9):
-        assert slope_point(a,f,i,0,t=temperature).process_state==S.ABKUEHLEN
-    assert slope_point(a,f,9,0,t=temperature).process_state==S.BEREIT
-    for i in range(10,13): assert slope_point(a,f,i,.3,t=temperature).process_state==S.BEREIT
-    assert slope_point(a,f,13,.3,t=temperature).process_state==S.AUFHEIZEN
-
-
-def test_ready_window_is_robust_but_does_not_accept_continuing_movement():
-    a,f=lifecycle(phase=S.ABKUEHLEN)
-    for i in range(15): assert slope_point(a,f,i,-.15,t=40).process_state==S.ABKUEHLEN
-    for i in range(15,23): slope_point(a,f,i,0,t=40)
-    assert slope_point(a,f,23,.4,t=40).process_state==S.BEREIT # 8/9 stable, median zero
+def test_inactive_stays_inactive_during_cooling_and_starts_only_on_persistent_rise(temperature):
+    a,f=lifecycle(phase=S.INAKTIV)
+    for i in range(20):
+        assert slope_point(a,f,i,-.15 if i<10 else 0,t=temperature).process_state==S.INAKTIV
+    for i in range(20,23):assert slope_point(a,f,i,.3,t=temperature).process_state==S.INAKTIV
+    assert slope_point(a,f,23,.3,t=temperature).process_state==S.AUFHEIZEN
 
 
 @pytest.mark.parametrize('kind',['missing','invalid','gap'])
@@ -117,19 +109,24 @@ def test_lifecycle_persistence_cannot_bridge_data_errors(kind):
     elif kind=='invalid': slope_point(a,f,2,.4,t=30,invalid=True)
     else: slope_point(a,f,3,.4,t=30)
     start=4 if kind=='gap' else 3
-    for i in range(start,start+3): assert slope_point(a,f,i,.4,t=30).process_state==S.BEREIT
+    for i in range(start,start+3): assert slope_point(a,f,i,.4,t=30).process_state==S.INAKTIV
     assert slope_point(a,f,start+3,.4,t=30).process_state==S.AUFHEIZEN
 
 
-def test_cooling_quiet_window_restarts_after_missing_data():
-    a,f=lifecycle(phase=S.ABKUEHLEN)
-    for i in range(8): slope_point(a,f,i,0,t=40)
-    assert slope_point(a,f,8,0,t=40,mv=None).process_state==S.DATENLUECKE
-    for i in range(9,18): assert slope_point(a,f,i,0,t=40).process_state==S.ABKUEHLEN
-    assert slope_point(a,f,18,0,t=40).process_state==S.BEREIT
+@pytest.mark.parametrize('phase',list(S))
+@pytest.mark.parametrize('kind',['missing','invalid','gap'])
+def test_quality_is_diagnostic_and_never_overwrites_business_state(phase,kind):
+    a,f=lifecycle(phase=phase)
+    slope_point(a,f,0,0,t=40)
+    kwargs={'mv':None} if kind=='missing' else {'invalid':True} if kind=='invalid' else {}
+    r=slope_point(a,f,2 if kind=='gap' else 1,0,t=40,**kwargs)
+    assert r.process_state==phase
+    assert r.details.data_quality==('SENSOR_UNGUELTIG' if kind=='invalid' else 'DATENLUECKE')
+    assert slope_point(a,f,3,0,t=40).process_state==phase
 
 
-def test_migration_invalidates_only_legacy_cache_series_and_is_repeatable(analysis_repo):
+@pytest.mark.parametrize('legacy',['BEREIT','ABKÜHLEN','ENDE','SENSOR_UNGUELTIG','DATENLUECKE'])
+def test_migration_invalidates_only_legacy_cache_series_and_is_repeatable(analysis_repo,legacy):
     from dataclasses import replace
     from disti.process_analysis.service import AnalysisService
     seed(analysis_repo)
@@ -137,8 +134,8 @@ def test_migration_invalidates_only_legacy_cache_series_and_is_repeatable(analys
     first=ProcessAnalyzer().update(p(0))
     analysis_repo.save_analysis([replace(first,algo_version='unaffected')])
     raw=analysis_repo._execute('SELECT * FROM sensor_measurements ORDER BY time,id')
-    analysis_repo._execute("UPDATE process_analysis SET process_state='ENDE' WHERE time=%s AND algo_version='cusum-v1'",(p(10).time.isoformat(),),fetch=None)
-    sql=(Path(__file__).parents[1]/'migrations/006_operating_process_states.sql').read_text()
+    analysis_repo._execute("UPDATE process_analysis SET process_state=%s WHERE time=%s AND algo_version='cusum-v1'",(legacy,p(10).time.isoformat()),fetch=None)
+    sql=(Path(__file__).parents[1]/'migrations/007_business_process_states.sql').read_text()
     def migrate():
         conn=analysis_repo.connection_factory()
         try: conn.executescript(sql)
@@ -163,7 +160,19 @@ def test_current_state_panel_reads_latest_string_outside_dashboard_window(analys
     query=panel['targets'][0]['rawSql'].replace('${analysis_detector:sqlstring}','%s').replace('${analysis_version:sqlstring}','%s')
     assert '$__timeFilter' not in query
     row=analysis_repo._execute(query,('cusum','cusum-v1'),'one')
-    assert row['Prozessstatus']=='BEREIT' and isinstance(row['Prozessstatus'],str)
+    assert row['Prozessstatus']=='INAKTIV' and isinstance(row['Prozessstatus'],str)
     assert panel['options']['reduceOptions']['fields']=='Prozessstatus'
     assert panel['options']['reduceOptions']['values'] is True
     assert all(v['hide']==2 for v in d['templating']['list'] if v['name'] in ('analysis_detector','analysis_version'))
+
+
+def test_long_invalid_sensor_period_keeps_middle_phase_even_after_detector_stop():
+    a,f=lifecycle(phase=S.MITTELLAUF)
+    slope_point(a,f,0,0)
+    for i in range(1,13):
+        r=slope_point(a,f,i,0,invalid=True)
+        assert r.process_state==S.MITTELLAUF
+        assert r.details.data_quality=='SENSOR_UNGUELTIG'
+    assert not a.active and a.ended
+    r=slope_point(a,f,13,0)
+    assert r.process_state==S.MITTELLAUF and r.details.data_quality=='OK'

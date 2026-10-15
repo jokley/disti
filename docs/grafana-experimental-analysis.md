@@ -1,5 +1,35 @@
 # DISTI: experimentelle Prozessanalyse
 
+## Fachliche Zustände und separate Datenqualität
+
+Die fachliche Zustandskette ist jetzt:
+`INAKTIV → AUFHEIZEN → VORLAUF → VORLAUF_AUSKLANG → MITTELLAUF → NACHLAUF_ENTWICKELT → NACHLAUF → INAKTIV`.
+BEREIT, ABKÜHLEN und ENDE sind keine aktuellen Prozessstates mehr.
+INAKTIV fasst Ruhe und Abkühlung zusammen. Der Start verwendet weiterhin
+`dT/dt >0.20` °C/min für 60 s ohne absolute Temperaturgrenze. Der Abschluss
+verwendet unverändert `dT/dt <=-0.50` °C/min für 60 s und mindestens 2 °C Abfall
+vom Maximum der letzten 300 s, führt aber direkt zu INAKTIV. Eine zusätzliche
+Ruhebestätigung vor dem nächsten Aufheizen entfällt.
+
+Die bisherigen Qualitätsprüfungen bleiben unverändert. Ihr Ergebnis steht in
+der vorhandenen JSON-Spalte `details` als `data_quality`: `OK`,
+`SENSOR_UNGUELTIG` oder `DATENLUECKE`. Bei Problemen bleibt der letzte fachliche
+Prozessstate erhalten, auch bei einem längeren Sensorfehler mit internem
+Detector-Stopp. Fenster und Persistenzen werden weiterhin unterbrochen;
+Rohdatenqualität und bestehende Engineering-Panels bleiben erhalten.
+Keine neue Tabelle, keine entfernten Analysefeatures und kein transition_reason.
+
+Aktueller Prozessstatus und Timeline verwenden dieselben sieben fachlichen
+Mappings: INAKTIV grau, AUFHEIZEN orange, VORLAUF blau, VORLAUF_AUSKLANG hellblau,
+MITTELLAUF grün, NACHLAUF_ENTWICKELT gelb und NACHLAUF rot. Keine SQL-Filter
+kaschieren alte Werte. Migration 007 invalidiert stattdessen vollständige
+betroffene Derived-Detector-/Versionsserien mit alten State-Werten. Der
+unveränderte Worker baut sie aus sensor_measurements wieder auf. Die Migration
+ist wiederholbar und verändert keine Rohdaten. Nicht produktiv ausgeführt.
+Eine zusätzliche Qualitätskachel wurde nicht ergänzt; Engineering-Diagnosen
+bleiben verfügbar, die bucketbezogene Qualität ist zusätzlich gespeichert.
+
+
 ## A. Dateien und Umfang
 
 Neu: `backend/disti/process_analysis/{__init__,models,config,features,states,analyzer,service}.py`,
@@ -87,7 +117,7 @@ keinen Einfluss auf den Analyzer.
 1. Datenlücke oder ungültiger Sensor: keine neuen Features/Detector-Entscheidungen.
 2. Der bestehende interne Detector startet unverändert bei T >= 75 °C;
    diese Regel steuert Baseline/CUSUM, nicht den sichtbaren Aufheizbeginn.
-   Der sichtbare Lifecycle startet ohne absolute Temperaturgrenze aus BEREIT.
+   Der sichtbare Lifecycle startet ohne absolute Temperaturgrenze aus INAKTIV.
 3. dT/dt ist die Steigung einer linearen Regression der Temperatur über das
    kausale 60-s-Fenster, in °C/min. Dies glättet die kurzfristige Dynamik; es ist
    nicht die Differenz ungeglätteter Einzelwerte.
@@ -129,34 +159,27 @@ keinen Einfluss auf den Analyzer.
 
 ### Sichtbarer Betriebs-Lifecycle
 
-BEREIT → AUFHEIZEN → VORLAUF → VORLAUF_AUSKLANG → MITTELLAUF →
-NACHLAUF_ENTWICKELT → NACHLAUF → ABKÜHLEN → BEREIT.
-DATENLUECKE und SENSOR_UNGUELTIG bleiben technische Qualitätsüberlagerungen,
-keine zusätzlichen normalen Prozessphasen. Der physische Zustand bleibt
-während solcher Überlagerungen intern erhalten.
+INAKTIV → AUFHEIZEN → VORLAUF → VORLAUF_AUSKLANG → MITTELLAUF →
+NACHLAUF_ENTWICKELT → NACHLAUF → INAKTIV.
+DATENLUECKE und SENSOR_UNGUELTIG stehen ausschließlich in `details.data_quality`;
+der letzte fachliche Prozessstate bleibt auch in den ausgegebenen Ergebnissen erhalten.
 
-- Initialzustand ist BEREIT. `dT/dt > 0.20` °C/min über 60 s startet die
-  sichtbare Aufheizphase, unabhängig von absoluter Temperatur und EC. Ein
-  kurzer Spike reicht nicht. Beim Start mitten in einer Bewegung ohne
-  vollständige Vorgeschichte ist BEREIT eine Initialannahme.
-- Nach Erreichen von NACHLAUF bleibt diese physische Phase bis zum
-  Abkühlbeginn bestehen; das boolesche CUSUM-Alarmsignal wird dadurch nicht
-  verändert. ABKÜHLEN benötigt `dT/dt <= -0.50` für mindestens 60 s und
-  mindestens 2.0 °C Abfall gegenüber dem Maximum der letzten 300 s. Ein
-  interner Detector-Stopp alleine erzeugt keinen neuen sichtbaren Endzustand.
-- ABKÜHLEN → BEREIT: kausales 180-s-Fenster mit Median `abs(dT/dt) <=0.10`
-  °C/min und mindestens 80 % der Werte `abs(dT/dt) <=0.20`. Das toleriert
-  einzelne Ausreißer, ohne fortgesetzte Abkühlung als Ruhe einzustufen. Es gibt
-  keine Raumtemperaturgrenze. Danach kann ein neuer positiver Anstieg starten.
-- Lücken oder ungültige Sensoren setzen die neuen Timer/Fenster zurück.
-  Nachfolgende gültige Buckets bauen sie neu auf. Keine Interpolation.
+- Initialzustand ist INAKTIV. `dT/dt >0.20` °C/min über 60 s startet die
+  sichtbare Aufheizphase, unabhängig von absoluter Temperatur und EC.
+- NACHLAUF → INAKTIV verwendet unverändert `dT/dt <=-0.50` für mindestens 60 s
+  und mindestens 2.0 °C Abfall vom Maximum der letzten 300 s. Das boolesche
+  CUSUM-Alarmsignal bleibt unabhängig. Interner Detector-Stopp allein genügt nicht.
+- INAKTIV bleibt während weiterer Abkühlung und Ruhe bestehen. Erst ein neuer
+  nachhaltiger positiver Temperaturanstieg startet AUFHEIZEN. Kein separater
+  ABKÜHLEN-State und keine zusätzliche 180-s-Ruhebestätigung.
+- Lücken oder ungültige Sensoren unterbrechen weiterhin Timer und Fenster;
+  keine Interpolation und keine neue Qualitätslogik.
 
-Neue zentrale Config-Werte: `heating_start_dtdt_min=0.20`,
+Aktive Lifecycle-Parameter: `heating_start_dtdt_min=0.20`,
 `heating_start_persistence_seconds=60`, `cooling_dtdt_max=-0.50`,
 `cooling_persistence_seconds=60`, `cooling_temperature_drop=2.0`,
-`cooling_peak_window_seconds=300`, `ready_window_seconds=180`,
-`ready_median_abs_dtdt_max=0.10`, `ready_bucket_abs_dtdt_max=0.20`,
-`ready_required_fraction=0.80`.
+`cooling_peak_window_seconds=300`. Frühere ready_*-Parameter bleiben kompatibel
+in der Config, werden für die vereinfachte State-Kette aber nicht mehr verwendet.
 
 Der Vorlauf beginnt mit einem qualitätsgeprüften EC-Anstieg nach erkannter
 starker Aufheizung. Ausklang und Mittellauf entstehen weiterhin aus dT/dt.
@@ -178,7 +201,7 @@ unverändert. Die Vorlauf-Übergänge selbst verwenden keine absolute Temperatur
    erfüllte Beobachtungen 40 s. Jede Unterschreitung unterbricht die Persistenz.
    Datenlücken, ungültige Messwerte und fehlendes EC-Mittel leeren EC-Fenster
    und Timer; bestätigte Aufheizung bleibt innerhalb derselben Phase bekannt.
-   Die EC-Historie darf bereits in BEREIT aufwärmen. Interne Detector-Starts
+   Die EC-Historie darf bereits in INAKTIV aufwärmen. Interne Detector-Starts
    löschen diese separate Historie nicht. Kein Peak-Drop-, Kollaps- oder
    dT/dt<=0.30-Trigger, keine absolute Temperatur und keine PT1000-Abkühlbedingung.
    Die unveränderte allgemeine Sensor-/EC-Qualitätsprüfung gilt weiterhin,
@@ -281,10 +304,10 @@ einem zeitbasierten Rebuild reproduzierbar gefüllt. Migration 004 bleibt
 unverändert; Migration 005 über den vorhandenen Entrypoint anwenden.
 
 Bei fehlenden Buckets erzeugt der Service explizite leere 20-s-Punkte.
-Status DATENLUECKE; Baseline, S und Alarm bleiben erhalten. Zeitfenster und
+`details.data_quality=DATENLUECKE`; fachlicher State, Baseline, S und Alarm bleiben erhalten. Zeitfenster und
 noch unbestätigte Plateau-Persistenz werden geleert, damit kein Trend über
 Lücken entsteht. Eine direkt gelieferte übersprungene Zeit wird ebenfalls als
-DATENLUECKE ausgegeben. Live deshalb jeden Bucket einschließlich leerer Buckets
+DATENLUECKE in der Qualitätsdiagnose ausgegeben. Live deshalb jeden Bucket einschließlich leerer Buckets
 liefern. Lücken unterbrechen auch den Nachweis eines kontinuierlichen
 Sensorfehlers; sie beenden den Brand nicht. Unterhalb des Detection-Gates
 bleibt CUSUM ebenfalls eingefroren, bis Gate oder Endkriterium greift.
@@ -444,13 +467,33 @@ EC-Baselinefenster; anschließend ist erst um 13:55:40 wieder eine vollständige
 Baseline vorhanden. 3.30 V am PT1000 ist ebenfalls nach bestehender Prüfung
 ungültig (initial bis 13:36:20 und erneut ab 18:35:40). Daher weicht der im
 verfügbaren Export rekonstruierte erste Aufheizbeginn von der früheren
-PT-Annahme ab. Dies ist keine Änderung an BEREIT → AUFHEIZEN.
+PT-Annahme ab. Dies ist keine Änderung an der bisherigen frühen Aufheizerkennung.
 
-Im direkten Vergleich mit dem vorherigen Fenster-Kollaps-Analyzer auf exakt
-denselben 1041 Eingängen ändern sich ausschließlich die VORLAUF-Zeitpunkte
-(vorher 14:04:20 / 16:44:40). Ausklang, Mittellauf, Nachlauf und Abkühlung sowie
-CUSUM-Details, Score, Alarm und internes ended-Flag bleiben identisch.
-Keine Referenzuhrzeit ist im Analyzer hart codiert.
+Die EC-Vorlaufregel bleibt unverändert: +2 mV gegenüber dem Median der
+vorherigen fünf Minuten mit 40 s Persistenz nach erkannter starker Aufheizung.
+Kein dT/dt-Fenster- oder Peak-Drop-Trigger für AUFHEIZEN → VORLAUF.
+
+Historische fachliche Sequenzen nach der Vereinfachung:
+
+| State | Zwetschke | Birne |
+|---|---|---|
+| INAKTIV | 13:02:40 (Exportbeginn) | ab 15:14:00 zwischen den Bränden |
+| AUFHEIZEN | 13:53:40 | 15:56:20 |
+| VORLAUF | 13:57:40 | 16:41:00 |
+| VORLAUF_AUSKLANG | 14:06:00 | 16:46:20 |
+| MITTELLAUF | 14:07:40 | 16:48:00 |
+| NACHLAUF_ENTWICKELT | 14:55:20 | 17:45:40 |
+| NACHLAUF | 14:58:00 | 17:50:00 |
+| INAKTIV | 15:14:00 | 18:32:00 |
+
+Keine technischen Qualitätssegmente in process_state. Qualitätsprobleme
+15:21:00–15:42:40 und ab 18:35:40 erhalten jeweils INAKTIV und bleiben in
+`details.data_quality` gespeichert. Andere Phasen bei künstlichen Lücken und
+Sensorfehlern einschließlich längerer Fehler mit internem Detector-Stopp sind
+separat getestet. Im Vergleich zum vorherigen EC-Analyzer sind alle aktiven
+Phasenzeiten sowie CUSUM-Details (außer dem zusätzlichen Qualitätsfeld), Score,
+Alarm und internes ended-Flag an allen 1041 Punkten identisch. Keine
+Referenzuhrzeit ist im Analyzer hart codiert.
 
 ### Kompatibilität und echter Rebuild
 
